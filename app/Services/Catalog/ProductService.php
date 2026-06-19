@@ -12,6 +12,12 @@ class ProductService
 {
     private const MAX_SLUG_LENGTH = 220;
 
+    private const NUMERIC_DEFAULT_FIELDS = [
+        'purchase_price',
+        'selling_price',
+        'reorder_level',
+    ];
+
     public function list(): Builder
     {
         return Product::query()->with(['category', 'unit'])->latest();
@@ -21,6 +27,7 @@ class ProductService
     {
         $slug = trim((string) ($data['slug'] ?? ''));
         $data['slug'] = $this->generateUniqueSlug($slug !== '' ? $slug : (string) ($data['name'] ?? 'item'));
+        $data = $this->normalizeNumericDefaults($data);
 
         return Product::create($data);
     }
@@ -32,6 +39,8 @@ class ProductService
             $slug !== '' ? $slug : (string) ($data['name'] ?? $product->name),
             (int) $product->getKey(),
         );
+
+        $data = $this->normalizeNumericDefaults($data, true);
 
         $product->update($data);
 
@@ -61,6 +70,21 @@ class ProductService
         }
 
         return $slug;
+    }
+
+    private function normalizeNumericDefaults(array $data, bool $onlyExistingKeys = false): array
+    {
+        foreach (self::NUMERIC_DEFAULT_FIELDS as $field) {
+            if ($onlyExistingKeys && ! array_key_exists($field, $data)) {
+                continue;
+            }
+
+            if (! array_key_exists($field, $data) || $data[$field] === null || $data[$field] === '') {
+                $data[$field] = 0;
+            }
+        }
+
+        return $data;
     }
 
     private function slugExists(string $slug, ?int $ignoreId = null): bool

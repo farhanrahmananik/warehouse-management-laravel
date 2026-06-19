@@ -5,10 +5,15 @@ namespace App\Services\Auth;
 use App\Http\Requests\Auth\LoginRequest;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Validation\ValidationException;
 
 class LoginService
 {
+    private const MAX_ATTEMPTS = 5;
+
+    private const LOCKOUT_SECONDS = 60;
+
     /**
      * Attempt to authenticate the user and regenerate the session.
      *
@@ -16,11 +21,17 @@ class LoginService
      */
     public function login(LoginRequest $request): void
     {
+        $this->ensureIsNotRateLimited($request);
+
         if (! Auth::attempt($request->credentials(), $request->remember())) {
+            RateLimiter::hit($request->throttleKey(), self::LOCKOUT_SECONDS);
+
             throw ValidationException::withMessages([
                 'email' => __('auth.failed'),
             ]);
         }
+
+        RateLimiter::clear($request->throttleKey());
 
         $request->session()->regenerate();
     }
@@ -31,5 +42,21 @@ class LoginService
 
         $request->session()->invalidate();
         $request->session()->regenerateToken();
+    }
+
+    /**
+     * @throws ValidationException
+     */
+    private function ensureIsNotRateLimited(LoginRequest $request): void
+    {
+        if (! RateLimiter::tooManyAttempts($request->throttleKey(), self::MAX_ATTEMPTS)) {
+            return;
+        }
+
+        $seconds = RateLimiter::availableIn($request->throttleKey());
+
+        throw ValidationException::withMessages([
+            'email' => "Too many login attempts. Please try again in {$seconds} seconds.",
+        ]);
     }
 }

@@ -1,34 +1,29 @@
-@extends('layouts.auth')
+@extends('layouts.app')
 
 @section('title', 'Dashboard - ' . config('app.name'))
 
 @section('content')
-    <div class="row justify-content-center">
-        <div class="col-12 col-lg-8">
-            <div class="card shadow-sm border-0">
-                <div class="card-body p-4">
-                    <div class="d-flex flex-column flex-md-row justify-content-between gap-3">
-                        <div>
-                            <h1 class="h3 mb-2">Warehouse Management Dashboard</h1>
-                            <p class="text-muted mb-0">This is a protected placeholder page.</p>
-                        </div>
+    <div class="card shadow-sm border-0">
+        <div class="card-body p-4">
+            <h1 class="h3 mb-2">Warehouse Management Dashboard</h1>
+            <p class="text-muted mb-4">This is a protected placeholder page.</p>
 
-                        <form method="POST" action="{{ route('logout') }}">
-                            @csrf
-                            <button type="submit" class="btn btn-outline-danger">Log out</button>
-                        </form>
-                    </div>
+            <dl class="row mb-4">
+                <dt class="col-sm-3">Name</dt>
+                <dd class="col-sm-9">{{ auth()->user()->name }}</dd>
 
-                    <hr class="my-4">
+                <dt class="col-sm-3">Email</dt>
+                <dd class="col-sm-9">{{ auth()->user()->email }}</dd>
+            </dl>
 
-                    <dl class="row mb-0">
-                        <dt class="col-sm-3">Name</dt>
-                        <dd class="col-sm-9">{{ auth()->user()->name }}</dd>
+            <div class="d-flex flex-column gap-2">
+                @can('permission', 'dashboard.view')
+                    <div class="alert alert-success mb-0">Dashboard permission verified</div>
+                @endcan
 
-                        <dt class="col-sm-3">Email</dt>
-                        <dd class="col-sm-9">{{ auth()->user()->email }}</dd>
-                    </dl>
-                </div>
+                @can('role', 'super-admin')
+                    <div class="alert alert-primary mb-0">Super Admin access enabled</div>
+                @endcan
             </div>
         </div>
     </div>

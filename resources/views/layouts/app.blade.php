@@ -44,6 +44,41 @@
                         </a>
                     @endcan
 
+                    @if (
+                        auth()->user()->can('permission', 'categories.view') ||
+                        auth()->user()->can('permission', 'suppliers.view') ||
+                        auth()->user()->can('permission', 'products.view')
+                    )
+                        <div class="small fw-semibold text-uppercase text-muted mt-4 mb-2">Catalog</div>
+
+                        @can('permission', 'categories.view')
+                            <a
+                                class="list-group-item list-group-item-action px-0 {{ request()->routeIs('categories.*') ? 'active' : '' }}"
+                                href="{{ route('categories.index') }}"
+                            >
+                                Categories
+                            </a>
+                        @endcan
+
+                        @can('permission', 'suppliers.view')
+                            <a
+                                class="list-group-item list-group-item-action px-0 {{ request()->routeIs('suppliers.*') ? 'active' : '' }}"
+                                href="{{ route('suppliers.index') }}"
+                            >
+                                Suppliers
+                            </a>
+                        @endcan
+
+                        @can('permission', 'products.view')
+                            <a
+                                class="list-group-item list-group-item-action px-0 {{ request()->routeIs('products.*') ? 'active' : '' }}"
+                                href="{{ route('products.index') }}"
+                            >
+                                Products
+                            </a>
+                        @endcan
+                    @endif
+
                     @can('role', 'super-admin')
                         <span class="badge text-bg-primary align-self-start my-3">Super Admin</span>
                     @endcan

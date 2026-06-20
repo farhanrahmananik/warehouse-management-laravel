@@ -4,6 +4,7 @@ use App\Http\Controllers\Auth\AuthenticatedSessionController;
 use App\Http\Controllers\Catalog\CategoryController;
 use App\Http\Controllers\Catalog\ProductController;
 use App\Http\Controllers\Catalog\SupplierController;
+use App\Http\Controllers\Warehouse\WarehouseController;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', function () {
@@ -93,4 +94,26 @@ Route::middleware('auth')->group(function () {
     Route::delete('/products/{product}', [ProductController::class, 'destroy'])
         ->middleware('permission:products.delete')
         ->name('products.destroy');
+
+    Route::get('/warehouses', [WarehouseController::class, 'index'])
+        ->middleware('permission:warehouses.view')
+        ->name('warehouses.index');
+    Route::get('/warehouses/create', [WarehouseController::class, 'create'])
+        ->middleware('permission:warehouses.create')
+        ->name('warehouses.create');
+    Route::post('/warehouses', [WarehouseController::class, 'store'])
+        ->middleware('permission:warehouses.create')
+        ->name('warehouses.store');
+    Route::get('/warehouses/{warehouse}', [WarehouseController::class, 'show'])
+        ->middleware('permission:warehouses.view')
+        ->name('warehouses.show');
+    Route::get('/warehouses/{warehouse}/edit', [WarehouseController::class, 'edit'])
+        ->middleware('permission:warehouses.update')
+        ->name('warehouses.edit');
+    Route::match(['put', 'patch'], '/warehouses/{warehouse}', [WarehouseController::class, 'update'])
+        ->middleware('permission:warehouses.update')
+        ->name('warehouses.update');
+    Route::delete('/warehouses/{warehouse}', [WarehouseController::class, 'destroy'])
+        ->middleware('permission:warehouses.delete')
+        ->name('warehouses.destroy');
 });

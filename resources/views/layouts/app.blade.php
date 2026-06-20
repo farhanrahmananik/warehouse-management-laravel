@@ -79,6 +79,17 @@
                         @endcan
                     @endif
 
+                    @can('permission', 'warehouses.view')
+                        <div class="small fw-semibold text-uppercase text-muted mt-4 mb-2">Warehouse</div>
+
+                        <a
+                            class="list-group-item list-group-item-action px-0 {{ request()->routeIs('warehouses.*') ? 'active' : '' }}"
+                            href="{{ route('warehouses.index') }}"
+                        >
+                            Warehouses
+                        </a>
+                    @endcan
+
                     @can('role', 'super-admin')
                         <span class="badge text-bg-primary align-self-start my-3">Super Admin</span>
                     @endcan

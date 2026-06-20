@@ -9,9 +9,15 @@
             <p class="text-muted mb-0">Review current warehouse stock balances.</p>
         </div>
 
-        @can('permission', 'stock-adjustments.create')
-            <a href="{{ route('stock-adjustments.create') }}" class="btn btn-primary">Stock Adjustment</a>
-        @endcan
+        <div class="d-flex flex-wrap gap-2">
+            @can('permission', 'stock.view')
+                <a href="{{ route('stock-movements.index') }}" class="btn btn-outline-primary">Movement Ledger</a>
+            @endcan
+
+            @can('permission', 'stock-adjustments.create')
+                <a href="{{ route('stock-adjustments.create') }}" class="btn btn-primary">Stock Adjustment</a>
+            @endcan
+        </div>
     </div>
 
     @if (session('success'))

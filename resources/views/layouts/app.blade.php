@@ -103,6 +103,13 @@
                             >
                                 Stock Overview
                             </a>
+
+                            <a
+                                class="list-group-item list-group-item-action px-0 {{ request()->routeIs('stock-movements.*') ? 'active' : '' }}"
+                                href="{{ route('stock-movements.index') }}"
+                            >
+                                Stock Movement Ledger
+                            </a>
                         @endcan
 
                         @can('permission', 'stock-adjustments.create')

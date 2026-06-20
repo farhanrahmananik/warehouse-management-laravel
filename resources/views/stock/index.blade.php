@@ -8,7 +8,17 @@
             <h1 class="h3 mb-1">Stock Overview</h1>
             <p class="text-muted mb-0">Review current warehouse stock balances.</p>
         </div>
+
+        @can('permission', 'stock-adjustments.create')
+            <a href="{{ route('stock-adjustments.create') }}" class="btn btn-primary">Stock Adjustment</a>
+        @endcan
     </div>
+
+    @if (session('success'))
+        <div class="alert alert-success" role="alert">
+            {{ session('success') }}
+        </div>
+    @endif
 
     <form method="GET" action="{{ route('stock.index') }}" class="card shadow-sm border-0 mb-4">
         <div class="card-body">

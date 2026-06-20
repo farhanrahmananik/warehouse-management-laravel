@@ -4,6 +4,7 @@ use App\Http\Controllers\Auth\AuthenticatedSessionController;
 use App\Http\Controllers\Catalog\CategoryController;
 use App\Http\Controllers\Catalog\ProductController;
 use App\Http\Controllers\Catalog\SupplierController;
+use App\Http\Controllers\Stock\StockAdjustmentController;
 use App\Http\Controllers\Stock\StockController;
 use App\Http\Controllers\Warehouse\WarehouseController;
 use Illuminate\Support\Facades\Route;
@@ -121,4 +122,11 @@ Route::middleware('auth')->group(function () {
     Route::get('/stock', [StockController::class, 'index'])
         ->middleware('permission:stock.view')
         ->name('stock.index');
+
+    Route::get('/stock-adjustments/create', [StockAdjustmentController::class, 'create'])
+        ->middleware('permission:stock-adjustments.create')
+        ->name('stock-adjustments.create');
+    Route::post('/stock-adjustments', [StockAdjustmentController::class, 'store'])
+        ->middleware('permission:stock-adjustments.create')
+        ->name('stock-adjustments.store');
 });

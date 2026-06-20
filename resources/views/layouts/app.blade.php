@@ -90,16 +90,30 @@
                         </a>
                     @endcan
 
-                    @can('permission', 'stock.view')
+                    @if (
+                        auth()->user()->can('permission', 'stock.view') ||
+                        auth()->user()->can('permission', 'stock-adjustments.create')
+                    )
                         <div class="small fw-semibold text-uppercase text-muted mt-4 mb-2">Stock</div>
 
-                        <a
-                            class="list-group-item list-group-item-action px-0 {{ request()->routeIs('stock.*') ? 'active' : '' }}"
-                            href="{{ route('stock.index') }}"
-                        >
-                            Stock Overview
-                        </a>
-                    @endcan
+                        @can('permission', 'stock.view')
+                            <a
+                                class="list-group-item list-group-item-action px-0 {{ request()->routeIs('stock.*') ? 'active' : '' }}"
+                                href="{{ route('stock.index') }}"
+                            >
+                                Stock Overview
+                            </a>
+                        @endcan
+
+                        @can('permission', 'stock-adjustments.create')
+                            <a
+                                class="list-group-item list-group-item-action px-0 {{ request()->routeIs('stock-adjustments.*') ? 'active' : '' }}"
+                                href="{{ route('stock-adjustments.create') }}"
+                            >
+                                Stock Adjustment
+                            </a>
+                        @endcan
+                    @endif
 
                     @can('role', 'super-admin')
                         <span class="badge text-bg-primary align-self-start my-3">Super Admin</span>

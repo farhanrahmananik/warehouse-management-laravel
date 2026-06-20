@@ -4,6 +4,7 @@ use App\Http\Controllers\Auth\AuthenticatedSessionController;
 use App\Http\Controllers\Catalog\CategoryController;
 use App\Http\Controllers\Catalog\ProductController;
 use App\Http\Controllers\Catalog\SupplierController;
+use App\Http\Controllers\Stock\StockController;
 use App\Http\Controllers\Warehouse\WarehouseController;
 use Illuminate\Support\Facades\Route;
 
@@ -116,4 +117,8 @@ Route::middleware('auth')->group(function () {
     Route::delete('/warehouses/{warehouse}', [WarehouseController::class, 'destroy'])
         ->middleware('permission:warehouses.delete')
         ->name('warehouses.destroy');
+
+    Route::get('/stock', [StockController::class, 'index'])
+        ->middleware('permission:stock.view')
+        ->name('stock.index');
 });

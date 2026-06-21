@@ -142,6 +142,9 @@ Route::middleware('auth')->group(function () {
     Route::post('/purchase-orders/{purchaseOrder}/approve', [PurchaseOrderController::class, 'approve'])
         ->middleware('permission:purchase-orders.approve')
         ->name('purchase-orders.approve');
+    Route::post('/purchase-orders/{purchaseOrder}/receive', [PurchaseOrderController::class, 'receive'])
+        ->middleware('permission:purchase-orders.receive')
+        ->name('purchase-orders.receive');
     Route::post('/purchase-orders/{purchaseOrder}/cancel', [PurchaseOrderController::class, 'cancel'])
         ->middleware('permission:purchase-orders.delete')
         ->name('purchase-orders.cancel');

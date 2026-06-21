@@ -30,6 +30,7 @@ class RolePermissionSeeder extends Seeder
                 'suppliers.view',
                 'warehouses.view',
                 'purchase-orders.view',
+                'purchase-orders.receive',
                 'stock.view',
                 'stock-adjustments.create',
                 'stock-in.create',

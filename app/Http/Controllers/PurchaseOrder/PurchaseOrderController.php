@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\PurchaseOrder\ApprovePurchaseOrderRequest;
 use App\Http\Requests\PurchaseOrder\CancelPurchaseOrderRequest;
 use App\Http\Requests\PurchaseOrder\PurchaseOrderIndexRequest;
+use App\Http\Requests\PurchaseOrder\ReceivePurchaseOrderRequest;
 use App\Http\Requests\PurchaseOrder\StorePurchaseOrderRequest;
 use App\Http\Requests\PurchaseOrder\UpdatePurchaseOrderRequest;
 use App\Models\Product;
@@ -105,6 +106,19 @@ class PurchaseOrderController extends Controller
         return redirect()
             ->route('purchase-orders.show', $purchaseOrder)
             ->with('success', 'Purchase order cancelled successfully.');
+    }
+
+    public function receive(ReceivePurchaseOrderRequest $request, PurchaseOrder $purchaseOrder): RedirectResponse
+    {
+        $purchaseOrder = $this->purchaseOrderService->receive(
+            $purchaseOrder,
+            $request->validated(),
+            $request->user(),
+        );
+
+        return redirect()
+            ->route('purchase-orders.show', $purchaseOrder)
+            ->with('success', 'Purchase order received successfully.');
     }
 
     public function destroy(PurchaseOrder $purchaseOrder): RedirectResponse

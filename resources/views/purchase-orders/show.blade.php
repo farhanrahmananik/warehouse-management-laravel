@@ -67,6 +67,10 @@
         </div>
     @endif
 
+    @error('status')
+        <div class="alert alert-danger" role="alert">{{ $message }}</div>
+    @enderror
+
     <div class="row g-4">
         <div class="col-lg-8">
             <div class="card shadow-sm border-0 mb-4">
@@ -207,6 +211,87 @@
                     </dl>
                 </div>
             </div>
+
+            @if ($purchaseOrder->isApproved() || $purchaseOrder->isPartiallyReceived())
+                @can('permission', 'purchase-orders.receive')
+                    <form method="POST" action="{{ route('purchase-orders.receive', $purchaseOrder) }}" class="card shadow-sm border-0 mb-4" onsubmit="return confirm('Receive these purchase order quantities into stock?');">
+                        @csrf
+                        <div class="card-header bg-white">
+                            <h2 class="h5 mb-0">Receive Stock</h2>
+                        </div>
+                        <div class="card-body">
+                            <p class="small text-muted mb-3">
+                                Enter the quantities received for this delivery. At least one item must have a received quantity greater than zero.
+                            </p>
+
+                            @error('items')
+                                <div class="alert alert-danger" role="alert">{{ $message }}</div>
+                            @enderror
+
+                            <div class="vstack gap-3">
+                                @foreach ($purchaseOrder->items as $item)
+                                    @php
+                                        $itemIndex = $loop->index;
+                                        $remainingQuantity = max(0, round((float) $item->quantity - (float) $item->received_quantity, 3));
+                                    @endphp
+
+                                    <div class="border rounded p-3">
+                                        <input type="hidden" name="items[{{ $itemIndex }}][purchase_order_item_id]" value="{{ $item->id }}">
+
+                                        <div class="fw-semibold">{{ $item->product?->name ?? '-' }}</div>
+                                        <div class="small text-muted mb-2">{{ $item->product?->sku ?? 'No SKU' }}</div>
+
+                                        <dl class="row small mb-2">
+                                            <dt class="col-7">Ordered</dt>
+                                            <dd class="col-5 text-end mb-1">{{ number_format((float) $item->quantity, 3) }}</dd>
+
+                                            <dt class="col-7">Received</dt>
+                                            <dd class="col-5 text-end mb-1">{{ number_format((float) $item->received_quantity, 3) }}</dd>
+
+                                            <dt class="col-7">Remaining</dt>
+                                            <dd class="col-5 text-end mb-0">{{ number_format($remainingQuantity, 3) }}</dd>
+                                        </dl>
+
+                                        <label for="items_{{ $itemIndex }}_received_quantity" class="form-label small">Receive Quantity</label>
+                                        <input
+                                            type="number"
+                                            name="items[{{ $itemIndex }}][received_quantity]"
+                                            id="items_{{ $itemIndex }}_received_quantity"
+                                            class="form-control @error('items.'.$itemIndex.'.received_quantity') is-invalid @enderror"
+                                            value="{{ old('items.'.$itemIndex.'.received_quantity') }}"
+                                            min="0"
+                                            max="{{ number_format($remainingQuantity, 3, '.', '') }}"
+                                            step="0.001"
+                                        >
+                                        @error('items.'.$itemIndex.'.received_quantity')
+                                            <div class="invalid-feedback">{{ $message }}</div>
+                                        @enderror
+                                        @error('items.'.$itemIndex.'.purchase_order_item_id')
+                                            <div class="text-danger small mt-1">{{ $message }}</div>
+                                        @enderror
+                                    </div>
+                                @endforeach
+                            </div>
+
+                            <div class="mt-3">
+                                <label for="receive_notes" class="form-label">Receiving Notes</label>
+                                <textarea
+                                    name="notes"
+                                    id="receive_notes"
+                                    rows="3"
+                                    class="form-control @error('notes') is-invalid @enderror"
+                                >{{ old('notes') }}</textarea>
+                                @error('notes')
+                                    <div class="invalid-feedback">{{ $message }}</div>
+                                @enderror
+                            </div>
+                        </div>
+                        <div class="card-footer bg-white d-flex justify-content-end">
+                            <button type="submit" class="btn btn-success">Receive Stock</button>
+                        </div>
+                    </form>
+                @endcan
+            @endif
 
             @if ($purchaseOrder->isDraft() || $purchaseOrder->isApproved())
                 @can('permission', 'purchase-orders.delete')

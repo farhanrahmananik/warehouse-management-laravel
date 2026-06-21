@@ -6,7 +6,9 @@ namespace App\Services\PurchaseOrder;
 
 use App\Models\PurchaseOrder;
 use App\Models\PurchaseOrderItem;
+use App\Models\StockMovement;
 use App\Models\User;
+use App\Models\WarehouseStock;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\DB;
@@ -163,6 +165,110 @@ class PurchaseOrderService
         });
     }
 
+    /**
+     * @param  array{items?: list<array{purchase_order_item_id: int|string, received_quantity?: int|float|string|null}>, notes?: string|null}  $data
+     */
+    public function receive(PurchaseOrder $purchaseOrder, array $data, User $user): PurchaseOrder
+    {
+        return DB::transaction(function () use ($purchaseOrder, $data, $user): PurchaseOrder {
+            $lockedPurchaseOrder = $this->lockedPurchaseOrder($purchaseOrder);
+
+            if (! $lockedPurchaseOrder->isApproved() && ! $lockedPurchaseOrder->isPartiallyReceived()) {
+                throw ValidationException::withMessages([
+                    'status' => 'Only approved or partially received purchase orders can be received.',
+                ]);
+            }
+
+            $receiveQuantities = $this->receiveQuantities($data['items'] ?? []);
+            $lockedItems = PurchaseOrderItem::query()
+                ->where('purchase_order_id', $lockedPurchaseOrder->id)
+                ->lockForUpdate()
+                ->get()
+                ->keyBy('id');
+
+            foreach (array_keys($receiveQuantities) as $purchaseOrderItemId) {
+                if (! $lockedItems->has($purchaseOrderItemId)) {
+                    throw ValidationException::withMessages([
+                        'items' => 'All receive items must belong to this purchase order.',
+                    ]);
+                }
+            }
+
+            $positiveReceiveQuantities = array_filter(
+                $receiveQuantities,
+                fn (float $quantity): bool => $quantity > 0,
+            );
+
+            if ($positiveReceiveQuantities === []) {
+                throw ValidationException::withMessages([
+                    'items' => 'At least one item must have a received quantity greater than zero.',
+                ]);
+            }
+
+            foreach ($positiveReceiveQuantities as $purchaseOrderItemId => $receivedQuantity) {
+                /** @var PurchaseOrderItem $item */
+                $item = $lockedItems->get($purchaseOrderItemId);
+                $remainingQuantity = round((float) $item->quantity - (float) $item->received_quantity, 3);
+
+                if ($receivedQuantity > $remainingQuantity) {
+                    throw ValidationException::withMessages([
+                        'items' => 'Received quantity cannot exceed remaining quantity.',
+                    ]);
+                }
+
+                $newReceivedQuantity = round((float) $item->received_quantity + $receivedQuantity, 3);
+                $item->update([
+                    'received_quantity' => $newReceivedQuantity,
+                ]);
+
+                $stock = $this->lockedWarehouseStock((int) $lockedPurchaseOrder->warehouse_id, (int) $item->product_id);
+                $balanceAfter = round((float) $stock->quantity + $receivedQuantity, 4);
+
+                $stock->update([
+                    'quantity' => $balanceAfter,
+                ]);
+
+                StockMovement::create([
+                    'warehouse_id' => $lockedPurchaseOrder->warehouse_id,
+                    'product_id' => $item->product_id,
+                    'movement_type' => 'purchase_in',
+                    'quantity' => $receivedQuantity,
+                    'balance_after' => $balanceAfter,
+                    'reference_type' => PurchaseOrder::class,
+                    'reference_id' => $lockedPurchaseOrder->id,
+                    'remarks' => 'Purchase order received: '.$lockedPurchaseOrder->po_number,
+                    'created_by' => $user->id,
+                ]);
+            }
+
+            $updateData = [
+                'status' => $lockedItems->every(function (PurchaseOrderItem $item): bool {
+                    return round((float) $item->received_quantity, 3) >= round((float) $item->quantity, 3);
+                })
+                    ? PurchaseOrder::STATUS_RECEIVED
+                    : PurchaseOrder::STATUS_PARTIALLY_RECEIVED,
+            ];
+
+            if ($updateData['status'] === PurchaseOrder::STATUS_RECEIVED) {
+                $updateData['received_at'] = now();
+                $updateData['received_by'] = $user->id;
+            }
+
+            $receivingNotes = trim((string) ($data['notes'] ?? ''));
+
+            if ($receivingNotes !== '') {
+                $updateData['notes'] = $this->appendReceivingNote(
+                    $lockedPurchaseOrder->notes,
+                    $receivingNotes,
+                );
+            }
+
+            $lockedPurchaseOrder->update($updateData);
+
+            return $this->loadPurchaseOrder($lockedPurchaseOrder);
+        });
+    }
+
     public function delete(PurchaseOrder $purchaseOrder): void
     {
         DB::transaction(function () use ($purchaseOrder): void {
@@ -281,6 +387,64 @@ class PurchaseOrderService
             ->whereKey($purchaseOrder->getKey())
             ->lockForUpdate()
             ->firstOrFail();
+    }
+
+    private function lockedWarehouseStock(int $warehouseId, int $productId): WarehouseStock
+    {
+        $stock = WarehouseStock::query()
+            ->where('warehouse_id', $warehouseId)
+            ->where('product_id', $productId)
+            ->lockForUpdate()
+            ->first();
+
+        if ($stock) {
+            return $stock;
+        }
+
+        WarehouseStock::create([
+            'warehouse_id' => $warehouseId,
+            'product_id' => $productId,
+            'quantity' => 0,
+            'reserved_quantity' => 0,
+        ]);
+
+        return WarehouseStock::query()
+            ->where('warehouse_id', $warehouseId)
+            ->where('product_id', $productId)
+            ->lockForUpdate()
+            ->firstOrFail();
+    }
+
+    /**
+     * @param  list<array{purchase_order_item_id: int|string, received_quantity?: int|float|string|null}>  $items
+     * @return array<int, float>
+     */
+    private function receiveQuantities(array $items): array
+    {
+        $receiveQuantities = [];
+
+        foreach ($items as $item) {
+            $purchaseOrderItemId = (int) $item['purchase_order_item_id'];
+            $receivedQuantity = round((float) ($item['received_quantity'] ?? 0), 3);
+            $receiveQuantities[$purchaseOrderItemId] = round(
+                ($receiveQuantities[$purchaseOrderItemId] ?? 0) + $receivedQuantity,
+                3,
+            );
+        }
+
+        return $receiveQuantities;
+    }
+
+    private function appendReceivingNote(?string $existingNotes, string $receivingNotes): string
+    {
+        $note = '[Received '.now()->format('Y-m-d H:i:s').'] '.$receivingNotes;
+        $existingNotes = trim((string) $existingNotes);
+
+        if ($existingNotes === '') {
+            return $note;
+        }
+
+        return $existingNotes.PHP_EOL.PHP_EOL.$note;
     }
 
     private function appendCancellationNote(?string $existingNotes, string $cancellationNotes): string

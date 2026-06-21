@@ -59,6 +59,26 @@ class User extends Authenticatable
         return $this->hasMany(StockMovement::class, 'created_by');
     }
 
+    public function createdPurchaseOrders(): HasMany
+    {
+        return $this->hasMany(PurchaseOrder::class, 'created_by');
+    }
+
+    public function approvedPurchaseOrders(): HasMany
+    {
+        return $this->hasMany(PurchaseOrder::class, 'approved_by');
+    }
+
+    public function receivedPurchaseOrders(): HasMany
+    {
+        return $this->hasMany(PurchaseOrder::class, 'received_by');
+    }
+
+    public function cancelledPurchaseOrders(): HasMany
+    {
+        return $this->hasMany(PurchaseOrder::class, 'cancelled_by');
+    }
+
     public function hasRole(string $role): bool
     {
         return $this->roles()

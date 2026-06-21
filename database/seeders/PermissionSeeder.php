@@ -43,6 +43,7 @@ class PermissionSeeder extends Seeder
             ['slug' => 'purchase-orders.update', 'name' => 'Update Purchase Orders', 'module' => 'purchase_orders'],
             ['slug' => 'purchase-orders.delete', 'name' => 'Delete Purchase Orders', 'module' => 'purchase_orders'],
             ['slug' => 'purchase-orders.approve', 'name' => 'Approve Purchase Orders', 'module' => 'purchase_orders'],
+            ['slug' => 'purchase-orders.receive', 'name' => 'Receive Purchase Orders', 'module' => 'purchase_orders'],
             ['slug' => 'stock.view', 'name' => 'View Stock', 'module' => 'stock'],
             ['slug' => 'stock-adjustments.create', 'name' => 'Create Stock Adjustments', 'module' => 'stock'],
             ['slug' => 'stock-in.create', 'name' => 'Create Stock In', 'module' => 'stock'],

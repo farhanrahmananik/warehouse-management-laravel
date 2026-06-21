@@ -4,6 +4,7 @@ use App\Http\Controllers\Auth\AuthenticatedSessionController;
 use App\Http\Controllers\Catalog\CategoryController;
 use App\Http\Controllers\Catalog\ProductController;
 use App\Http\Controllers\Catalog\SupplierController;
+use App\Http\Controllers\PurchaseOrder\PurchaseOrderController;
 use App\Http\Controllers\Stock\StockAdjustmentController;
 use App\Http\Controllers\Stock\StockController;
 use App\Http\Controllers\Stock\StockMovementController;
@@ -119,6 +120,37 @@ Route::middleware('auth')->group(function () {
     Route::delete('/warehouses/{warehouse}', [WarehouseController::class, 'destroy'])
         ->middleware('permission:warehouses.delete')
         ->name('warehouses.destroy');
+
+    Route::get('/purchase-orders', [PurchaseOrderController::class, 'index'])
+        ->middleware('permission:purchase-orders.view')
+        ->name('purchase-orders.index');
+    Route::get('/purchase-orders/create', [PurchaseOrderController::class, 'create'])
+        ->middleware('permission:purchase-orders.create')
+        ->name('purchase-orders.create');
+    Route::post('/purchase-orders', [PurchaseOrderController::class, 'store'])
+        ->middleware('permission:purchase-orders.create')
+        ->name('purchase-orders.store');
+    Route::get('/purchase-orders/{purchaseOrder}', [PurchaseOrderController::class, 'show'])
+        ->middleware('permission:purchase-orders.view')
+        ->name('purchase-orders.show');
+    Route::get('/purchase-orders/{purchaseOrder}/edit', [PurchaseOrderController::class, 'edit'])
+        ->middleware('permission:purchase-orders.update')
+        ->name('purchase-orders.edit');
+    Route::match(['put', 'patch'], '/purchase-orders/{purchaseOrder}', [PurchaseOrderController::class, 'update'])
+        ->middleware('permission:purchase-orders.update')
+        ->name('purchase-orders.update');
+    Route::post('/purchase-orders/{purchaseOrder}/approve', [PurchaseOrderController::class, 'approve'])
+        ->middleware('permission:purchase-orders.approve')
+        ->name('purchase-orders.approve');
+    Route::post('/purchase-orders/{purchaseOrder}/receive', [PurchaseOrderController::class, 'receive'])
+        ->middleware('permission:purchase-orders.receive')
+        ->name('purchase-orders.receive');
+    Route::post('/purchase-orders/{purchaseOrder}/cancel', [PurchaseOrderController::class, 'cancel'])
+        ->middleware('permission:purchase-orders.delete')
+        ->name('purchase-orders.cancel');
+    Route::delete('/purchase-orders/{purchaseOrder}', [PurchaseOrderController::class, 'destroy'])
+        ->middleware('permission:purchase-orders.delete')
+        ->name('purchase-orders.destroy');
 
     Route::get('/stock', [StockController::class, 'index'])
         ->middleware('permission:stock.view')

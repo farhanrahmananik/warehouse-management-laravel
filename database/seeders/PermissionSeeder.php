@@ -46,6 +46,7 @@ class PermissionSeeder extends Seeder
             ['slug' => 'purchase-orders.receive', 'name' => 'Receive Purchase Orders', 'module' => 'purchase_orders'],
             ['slug' => 'stock.view', 'name' => 'View Stock', 'module' => 'stock'],
             ['slug' => 'stock-adjustments.create', 'name' => 'Create Stock Adjustments', 'module' => 'stock'],
+            ['slug' => 'stock-in.view', 'name' => 'View Stock In', 'module' => 'stock'],
             ['slug' => 'stock-in.create', 'name' => 'Create Stock In', 'module' => 'stock'],
             ['slug' => 'stock-out.create', 'name' => 'Create Stock Out', 'module' => 'stock'],
             ['slug' => 'stock-transfer.create', 'name' => 'Create Stock Transfer', 'module' => 'stock'],

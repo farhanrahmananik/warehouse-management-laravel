@@ -71,6 +71,21 @@ class Product extends Model
         return $this->hasMany(PurchaseOrderItem::class);
     }
 
+    public function stockInItems(): HasMany
+    {
+        return $this->hasMany(StockInItem::class);
+    }
+
+    public function stockOutItems(): HasMany
+    {
+        return $this->hasMany(StockOutItem::class);
+    }
+
+    public function stockTransferItems(): HasMany
+    {
+        return $this->hasMany(StockTransferItem::class);
+    }
+
     public function scopeActive(Builder $query): Builder
     {
         return $query->where('is_active', true);

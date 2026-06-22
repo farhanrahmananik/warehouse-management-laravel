@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\Auth\AuthenticatedSessionController;
 use App\Http\Controllers\Catalog\CategoryController;
+use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\Catalog\ProductController;
 use App\Http\Controllers\Catalog\SupplierController;
 use App\Http\Controllers\PurchaseOrder\PurchaseOrderController;
@@ -29,9 +30,9 @@ Route::middleware('guest')->group(function () {
 });
 
 Route::middleware('auth')->group(function () {
-    Route::get('/dashboard', function () {
-        return view('dashboard.index');
-    })->middleware('permission:dashboard.view')->name('dashboard');
+    Route::get('/dashboard', DashboardController::class)
+        ->middleware('permission:dashboard.view')
+        ->name('dashboard');
 
     Route::post('/logout', [AuthenticatedSessionController::class, 'destroy'])
         ->name('logout');

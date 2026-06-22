@@ -1,11 +1,11 @@
 <?php
 
-use App\Http\Controllers\Auth\AuthenticatedSessionController;
 use App\Http\Controllers\AuditLogController;
+use App\Http\Controllers\Auth\AuthenticatedSessionController;
 use App\Http\Controllers\Catalog\CategoryController;
-use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\Catalog\ProductController;
 use App\Http\Controllers\Catalog\SupplierController;
+use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\PurchaseOrder\PurchaseOrderController;
 use App\Http\Controllers\Report\ReportController;
 use App\Http\Controllers\Stock\StockAdjustmentController;
@@ -164,15 +164,27 @@ Route::middleware('auth')->group(function () {
     Route::get('/reports/inventory', [ReportController::class, 'inventory'])
         ->middleware('permission:reports.inventory.view')
         ->name('reports.inventory');
+    Route::get('/reports/inventory/export', [ReportController::class, 'exportInventory'])
+        ->middleware(['permission:reports.inventory.view', 'permission:reports.export'])
+        ->name('reports.inventory.export');
     Route::get('/reports/stock-movements', [ReportController::class, 'stockMovements'])
         ->middleware('permission:reports.stock-movements.view')
         ->name('reports.stock-movements');
+    Route::get('/reports/stock-movements/export', [ReportController::class, 'exportStockMovements'])
+        ->middleware(['permission:reports.stock-movements.view', 'permission:reports.export'])
+        ->name('reports.stock-movements.export');
     Route::get('/reports/low-stock', [ReportController::class, 'lowStock'])
         ->middleware('permission:reports.low-stock.view')
         ->name('reports.low-stock');
+    Route::get('/reports/low-stock/export', [ReportController::class, 'exportLowStock'])
+        ->middleware(['permission:reports.low-stock.view', 'permission:reports.export'])
+        ->name('reports.low-stock.export');
     Route::get('/reports/purchase-orders', [ReportController::class, 'purchaseOrders'])
         ->middleware('permission:reports.purchase-orders.view')
         ->name('reports.purchase-orders');
+    Route::get('/reports/purchase-orders/export', [ReportController::class, 'exportPurchaseOrders'])
+        ->middleware(['permission:reports.purchase-orders.view', 'permission:reports.export'])
+        ->name('reports.purchase-orders.export');
 
     Route::get('/audit-logs', [AuditLogController::class, 'index'])
         ->middleware('permission:audit_logs.view')

@@ -17,8 +17,55 @@ class RolePermissionSeeder extends Seeder
             ->pluck('id')
             ->all();
 
+        $managerPermissionSlugs = [
+            'dashboard.view',
+            'users.view',
+            'users.create',
+            'users.update',
+            'roles.view',
+            'roles.create',
+            'roles.update',
+            'products.view',
+            'products.create',
+            'products.update',
+            'products.delete',
+            'categories.view',
+            'categories.create',
+            'categories.update',
+            'categories.delete',
+            'suppliers.view',
+            'suppliers.create',
+            'suppliers.update',
+            'suppliers.delete',
+            'warehouses.view',
+            'warehouses.create',
+            'warehouses.update',
+            'warehouses.delete',
+            'purchase-orders.view',
+            'purchase-orders.create',
+            'purchase-orders.update',
+            'purchase-orders.delete',
+            'purchase-orders.approve',
+            'purchase-orders.receive',
+            'stock.view',
+            'stock-adjustments.create',
+            'stock-in.view',
+            'stock-in.create',
+            'stock-out.view',
+            'stock-out.create',
+            'stock-transfer.view',
+            'stock-transfer.create',
+            'reports.view',
+            'reports.inventory.view',
+            'reports.stock-movements.view',
+            'reports.low-stock.view',
+            'reports.purchase-orders.view',
+            'reports.export',
+            'audit_logs.view',
+        ];
+
         $managerPermissionIds = Permission::query()
-            ->whereNotIn('slug', ['users.delete', 'roles.delete'])
+            ->whereIn('slug', $managerPermissionSlugs)
             ->pluck('id')
             ->all();
 

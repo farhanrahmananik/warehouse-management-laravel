@@ -57,6 +57,7 @@ class PermissionSeeder extends Seeder
             ['slug' => 'reports.stock-movements.view', 'name' => 'View Stock Movement Reports', 'module' => 'reports'],
             ['slug' => 'reports.low-stock.view', 'name' => 'View Low Stock Reports', 'module' => 'reports'],
             ['slug' => 'reports.purchase-orders.view', 'name' => 'View Purchase Order Reports', 'module' => 'reports'],
+            ['slug' => 'reports.export', 'name' => 'Export Reports', 'module' => 'reports'],
             ['slug' => 'audit_logs.view', 'name' => 'View Audit Logs', 'module' => 'audit_logs'],
         ];
 

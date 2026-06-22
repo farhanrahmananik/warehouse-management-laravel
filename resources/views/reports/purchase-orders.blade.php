@@ -24,6 +24,11 @@
             <h1 class="h3 mb-1">Purchase Order Report</h1>
             <p class="text-muted mb-0">Review read-only purchase order history, totals, and receiving progress.</p>
         </div>
+        @can('permission', 'reports.export')
+            <a href="{{ route('reports.purchase-orders.export', request()->query()) }}" class="btn btn-outline-primary">
+                Export CSV
+            </a>
+        @endcan
     </div>
 
     <form method="GET" action="{{ route('reports.purchase-orders') }}" class="card shadow-sm border-0 mb-4">

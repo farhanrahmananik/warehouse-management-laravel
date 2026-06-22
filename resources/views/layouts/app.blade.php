@@ -163,12 +163,63 @@
                         @endcan
                     @endif
 
+                    @if (
+                        auth()->user()->can('permission', 'reports.view') ||
+                        auth()->user()->can('permission', 'reports.inventory.view') ||
+                        auth()->user()->can('permission', 'reports.stock-movements.view') ||
+                        auth()->user()->can('permission', 'reports.low-stock.view') ||
+                        auth()->user()->can('permission', 'reports.purchase-orders.view')
+                    )
+                        <div class="small fw-semibold text-uppercase text-muted mt-4 mb-2">Reports</div>
+
+                        @can('permission', 'reports.view')
+                            <a
+                                class="list-group-item list-group-item-action px-0 {{ request()->routeIs('reports.index') ? 'active' : '' }}"
+                                href="{{ route('reports.index') }}"
+                            >
+                                Reports Overview
+                            </a>
+                        @endcan
+
+                        @can('permission', 'reports.inventory.view')
+                            <a
+                                class="list-group-item list-group-item-action px-0 {{ request()->routeIs('reports.inventory') ? 'active' : '' }}"
+                                href="{{ route('reports.inventory') }}"
+                            >
+                                Inventory Report
+                            </a>
+                        @endcan
+
+                        @can('permission', 'reports.stock-movements.view')
+                            <a
+                                class="list-group-item list-group-item-action px-0 {{ request()->routeIs('reports.stock-movements') ? 'active' : '' }}"
+                                href="{{ route('reports.stock-movements') }}"
+                            >
+                                Stock Movement Report
+                            </a>
+                        @endcan
+
+                        @can('permission', 'reports.low-stock.view')
+                            <a
+                                class="list-group-item list-group-item-action px-0 {{ request()->routeIs('reports.low-stock') ? 'active' : '' }}"
+                                href="{{ route('reports.low-stock') }}"
+                            >
+                                Low Stock Report
+                            </a>
+                        @endcan
+
+                        @can('permission', 'reports.purchase-orders.view')
+                            <a
+                                class="list-group-item list-group-item-action px-0 {{ request()->routeIs('reports.purchase-orders') ? 'active' : '' }}"
+                                href="{{ route('reports.purchase-orders') }}"
+                            >
+                                Purchase Order Report
+                            </a>
+                        @endcan
+                    @endif
+
                     @can('role', 'super-admin')
                         <span class="badge text-bg-primary align-self-start my-3">Super Admin</span>
-                    @endcan
-
-                    @can('permission', 'reports.view')
-                        <div class="small text-muted mt-2">Reports access available</div>
                     @endcan
                 </div>
             </aside>

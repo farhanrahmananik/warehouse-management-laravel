@@ -6,6 +6,7 @@ use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\Catalog\ProductController;
 use App\Http\Controllers\Catalog\SupplierController;
 use App\Http\Controllers\PurchaseOrder\PurchaseOrderController;
+use App\Http\Controllers\Report\ReportController;
 use App\Http\Controllers\Stock\StockAdjustmentController;
 use App\Http\Controllers\Stock\StockController;
 use App\Http\Controllers\Stock\StockInController;
@@ -155,6 +156,22 @@ Route::middleware('auth')->group(function () {
     Route::delete('/purchase-orders/{purchaseOrder}', [PurchaseOrderController::class, 'destroy'])
         ->middleware('permission:purchase-orders.delete')
         ->name('purchase-orders.destroy');
+
+    Route::get('/reports', [ReportController::class, 'index'])
+        ->middleware('permission:reports.view')
+        ->name('reports.index');
+    Route::get('/reports/inventory', [ReportController::class, 'inventory'])
+        ->middleware('permission:reports.inventory.view')
+        ->name('reports.inventory');
+    Route::get('/reports/stock-movements', [ReportController::class, 'stockMovements'])
+        ->middleware('permission:reports.stock-movements.view')
+        ->name('reports.stock-movements');
+    Route::get('/reports/low-stock', [ReportController::class, 'lowStock'])
+        ->middleware('permission:reports.low-stock.view')
+        ->name('reports.low-stock');
+    Route::get('/reports/purchase-orders', [ReportController::class, 'purchaseOrders'])
+        ->middleware('permission:reports.purchase-orders.view')
+        ->name('reports.purchase-orders');
 
     Route::get('/stock', [StockController::class, 'index'])
         ->middleware('permission:stock.view')

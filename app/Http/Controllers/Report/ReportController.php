@@ -4,7 +4,9 @@ namespace App\Http\Controllers\Report;
 
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Report\InventoryReportFilterRequest;
+use App\Http\Requests\Report\StockMovementReportFilterRequest;
 use App\Services\Report\InventoryReportService;
+use App\Services\Report\StockMovementReportService;
 use Illuminate\View\View;
 
 class ReportController extends Controller
@@ -22,9 +24,12 @@ class ReportController extends Controller
         return view('reports.inventory', $inventoryReportService->generate($request->validated()));
     }
 
-    public function stockMovements(): View
+    public function stockMovements(
+        StockMovementReportFilterRequest $request,
+        StockMovementReportService $stockMovementReportService,
+    ): View
     {
-        return view('reports.stock-movements');
+        return view('reports.stock-movements', $stockMovementReportService->generate($request->validated()));
     }
 
     public function lowStock(): View

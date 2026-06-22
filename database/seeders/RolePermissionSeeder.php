@@ -33,8 +33,11 @@ class RolePermissionSeeder extends Seeder
                 'purchase-orders.receive',
                 'stock.view',
                 'stock-adjustments.create',
+                'stock-in.view',
                 'stock-in.create',
+                'stock-out.view',
                 'stock-out.create',
+                'stock-transfer.view',
                 'stock-transfer.create',
             ])
             ->pluck('id')

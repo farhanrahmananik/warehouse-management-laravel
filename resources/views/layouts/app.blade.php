@@ -103,6 +103,9 @@
 
                     @if (
                         auth()->user()->can('permission', 'stock.view') ||
+                        auth()->user()->can('permission', 'stock-in.view') ||
+                        auth()->user()->can('permission', 'stock-out.view') ||
+                        auth()->user()->can('permission', 'stock-transfer.view') ||
                         auth()->user()->can('permission', 'stock-adjustments.create')
                     )
                         <div class="small fw-semibold text-uppercase text-muted mt-4 mb-2">Stock</div>
@@ -120,6 +123,33 @@
                                 href="{{ route('stock-movements.index') }}"
                             >
                                 Stock Movement Ledger
+                            </a>
+                        @endcan
+
+                        @can('permission', 'stock-in.view')
+                            <a
+                                class="list-group-item list-group-item-action px-0 {{ request()->routeIs('stock-ins.*') ? 'active' : '' }}"
+                                href="{{ route('stock-ins.index') }}"
+                            >
+                                Stock In
+                            </a>
+                        @endcan
+
+                        @can('permission', 'stock-out.view')
+                            <a
+                                class="list-group-item list-group-item-action px-0 {{ request()->routeIs('stock-outs.*') ? 'active' : '' }}"
+                                href="{{ route('stock-outs.index') }}"
+                            >
+                                Stock Out
+                            </a>
+                        @endcan
+
+                        @can('permission', 'stock-transfer.view')
+                            <a
+                                class="list-group-item list-group-item-action px-0 {{ request()->routeIs('stock-transfers.*') ? 'active' : '' }}"
+                                href="{{ route('stock-transfers.index') }}"
+                            >
+                                Stock Transfers
                             </a>
                         @endcan
 

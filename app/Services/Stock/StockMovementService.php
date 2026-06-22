@@ -67,6 +67,7 @@ class StockMovementService
             'adjustment_in' => 'Adjustment In',
             'adjustment_out' => 'Adjustment Out',
             'purchase_in' => 'Purchase In',
+            'stock_in' => 'Stock In',
             'stock_out' => 'Stock Out',
             'transfer_in' => 'Transfer In',
             'transfer_out' => 'Transfer Out',

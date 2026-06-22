@@ -1,66 +1,131 @@
-<p align="center"><a href="https://laravel.com" target="_blank"><img src="https://raw.githubusercontent.com/laravel/art/master/logo-lockup/5%20SVG/2%20CMYK/1%20Full%20Color/laravel-logolockup-cmyk-red.svg" width="400" alt="Laravel Logo"></a></p>
+# Warehouse Management - Laravel
 
-<p align="center">
-<a href="https://github.com/laravel/framework/actions"><img src="https://github.com/laravel/framework/workflows/tests/badge.svg" alt="Build Status"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/dt/laravel/framework" alt="Total Downloads"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/v/laravel/framework" alt="Latest Stable Version"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/l/laravel/framework" alt="License"></a>
-</p>
+Warehouse Management - Laravel is a production-style Warehouse and Inventory Management System built with Laravel 12. It demonstrates a full web application architecture for catalog management, warehouses, stock operations, purchase order workflows, reporting, exports, audit logs, and dashboard visibility.
 
-## About Laravel
+## Core Features
 
-Laravel is a web application framework with expressive, elegant syntax. We believe development must be an enjoyable and creative experience to be truly fulfilling. Laravel takes the pain out of development by easing common tasks used in many web projects, such as:
+| Domain | Features |
+| --- | --- |
+| Authentication & Authorization | Session-based login/logout, custom roles and permissions, permission middleware, Gates, and protected Blade visibility. |
+| Catalog Management | Products, categories, suppliers, units, validation, soft deletes, and permission-protected CRUD screens. |
+| Warehouse Management | Warehouse master data with create, read, update, delete, validation, authorization, and soft deletes. |
+| Stock Management | Stock overview, stock adjustments, stock in, stock out, stock transfer, warehouse stock balances, and stock movement ledger. |
+| Purchase Orders | Draft, approve, cancel, receive, purchase order items, status transitions, and receiving into stock. |
+| Reports | Inventory, stock movement, low stock, and purchase order report pages. |
+| CSV Export Reports | Permission-protected CSV exports for implemented reports. |
+| Audit Logs | Read-only audit log UI plus audit events for authentication, catalog, warehouse, stock, and purchase order actions. |
+| Dashboard | Read-only dashboard summaries for catalog, warehouse, stock, purchase orders, low stock, and recent movements. |
 
-- [Simple, fast routing engine](https://laravel.com/docs/routing).
-- [Powerful dependency injection container](https://laravel.com/docs/container).
-- Multiple back-ends for [session](https://laravel.com/docs/session) and [cache](https://laravel.com/docs/cache) storage.
-- Expressive, intuitive [database ORM](https://laravel.com/docs/eloquent).
-- Database agnostic [schema migrations](https://laravel.com/docs/migrations).
-- [Robust background job processing](https://laravel.com/docs/queues).
-- [Real-time event broadcasting](https://laravel.com/docs/broadcasting).
+## Tech Stack
 
-Laravel is accessible, powerful, and provides tools required for large, robust applications.
+| Layer | Technology |
+| --- | --- |
+| Backend | PHP 8.2+, Laravel 12 |
+| Database | MySQL for local development |
+| Testing Database | SQLite in-memory via `phpunit.xml` |
+| Frontend Assets | Bootstrap 5, Vite |
+| Testing | PHPUnit, Laravel feature tests |
+| Version Control | Git and GitHub |
 
-## Learning Laravel
+## Architecture Highlights
 
-Laravel has the most extensive and thorough [documentation](https://laravel.com/docs) and video tutorial library of all modern web application frameworks, making it a breeze to get started with the framework.
+- Thin controllers that delegate validation to Form Requests and business behavior to services.
+- Service layer for stock mutations, purchase order workflows, report queries, dashboard data, and audit logging.
+- Eloquent models with explicit relationships for users, roles, permissions, catalog data, warehouses, stock documents, purchase orders, and audit logs.
+- Permission-based route protection using custom RBAC middleware and Laravel Gates.
+- Feature tests for authentication, authorization, CRUD workflows, stock rules, purchase orders, reports, exports, dashboard data, and audit logging.
+- Audit logging for important user and business actions, with sensitive-value sanitization.
 
-You may also try the [Laravel Bootcamp](https://bootcamp.laravel.com), where you will be guided through building a modern Laravel application from scratch.
+## Documentation
 
-If you don't feel like reading, [Laracasts](https://laracasts.com) can help. Laracasts contains thousands of video tutorials on a range of topics including Laravel, modern PHP, unit testing, and JavaScript. Boost your skills by digging into our comprehensive video library.
+- [Database Design](docs/database/database-design.md)
+- [Entity Relationship Diagram](docs/database/erd.md)
+- [Testing Guide](docs/testing/testing-guide.md)
 
-## Laravel Sponsors
+## Installation
 
-We would like to extend our thanks to the following sponsors for funding Laravel development. If you are interested in becoming a sponsor, please visit the [Laravel Partners program](https://partners.laravel.com).
+Clone the repository, install dependencies, configure the environment, and run the migrations:
 
-### Premium Partners
+```bash
+composer install
+npm install
+cp .env.example .env
+php artisan key:generate
+php artisan migrate --seed
+npm run build
+php artisan serve
+```
 
-- **[Vehikl](https://vehikl.com/)**
-- **[Tighten Co.](https://tighten.co)**
-- **[WebReinvent](https://webreinvent.com/)**
-- **[Kirschbaum Development Group](https://kirschbaumdevelopment.com)**
-- **[64 Robots](https://64robots.com)**
-- **[Curotec](https://www.curotec.com/services/technologies/laravel/)**
-- **[Cyber-Duck](https://cyber-duck.co.uk)**
-- **[DevSquad](https://devsquad.com/hire-laravel-developers)**
-- **[Jump24](https://jump24.co.uk)**
-- **[Redberry](https://redberry.international/laravel/)**
-- **[Active Logic](https://activelogic.com)**
-- **[byte5](https://byte5.de)**
-- **[OP.GG](https://op.gg)**
+Before running `php artisan migrate --seed`, configure `.env` for your local MySQL database connection.
 
-## Contributing
+The Super Admin seed user is environment-driven. Set these values in `.env` before seeding:
 
-Thank you for considering contributing to the Laravel framework! The contribution guide can be found in the [Laravel documentation](https://laravel.com/docs/contributions).
+```env
+SEED_SUPER_ADMIN_NAME=
+SEED_SUPER_ADMIN_EMAIL=
+SEED_SUPER_ADMIN_PASSWORD=
+```
 
-## Code of Conduct
+Credentials are intentionally not hardcoded in the repository.
 
-In order to ensure that the Laravel community is welcoming to all, please review and abide by the [Code of Conduct](https://laravel.com/docs/contributions#code-of-conduct).
+## Testing
 
-## Security Vulnerabilities
+Run the automated test suite:
 
-If you discover a security vulnerability within Laravel, please send an e-mail to Taylor Otwell via [taylor@laravel.com](mailto:taylor@laravel.com). All security vulnerabilities will be promptly addressed.
+```bash
+php artisan test
+```
 
-## License
+Run the frontend build check:
 
-The Laravel framework is open-sourced software licensed under the [MIT license](https://opensource.org/licenses/MIT).
+```bash
+npm run build
+```
+
+Current baseline: **249 tests passing with 1455 assertions**.
+
+The test suite uses SQLite in-memory for automated tests, as configured in `phpunit.xml`, so test runs do not touch the local MySQL development database.
+
+## Default Login / Seeded Access
+
+The project includes RBAC seeders for roles, permissions, role-permission mappings, product units, and the initial Super Admin user. The Super Admin account is created by `SuperAdminSeeder` using:
+
+- `SEED_SUPER_ADMIN_NAME`
+- `SEED_SUPER_ADMIN_EMAIL`
+- `SEED_SUPER_ADMIN_PASSWORD`
+
+If the email or password value is missing, the seeder fails with a clear error instead of creating an unsafe default account.
+
+## Git Workflow
+
+Development is organized around focused feature branches and pull requests.
+
+```text
+feature/<scope-name>
+```
+
+Common commit prefixes used in this project:
+
+```text
+docs: ...
+feat: ...
+test: ...
+fix: ...
+```
+
+Before opening a pull request, run:
+
+```bash
+git status --short
+php artisan test
+npm run build
+git diff --stat
+```
+
+## Project Status
+
+Core warehouse and inventory workflows are implemented, including catalog management, warehouse CRUD, stock overview, stock adjustments, stock in/out/transfer workflows, purchase orders, reports, CSV exports, dashboard summaries, audit logs, and testing documentation.
+
+## Learning / Portfolio Value
+
+This project demonstrates practical Laravel application architecture: RBAC, permission middleware, service-oriented workflow logic, stock ledger rules, purchase order state transitions, reporting, auditability, and automated feature testing for both happy paths and business-rule failures.

@@ -12,6 +12,7 @@ use App\Models\WarehouseStock;
 use App\Services\Audit\AuditLogService;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
@@ -275,7 +276,7 @@ class PurchaseOrderService
      */
     public function receive(PurchaseOrder $purchaseOrder, array $data, User $user): PurchaseOrder
     {
-        return DB::transaction(function () use ($purchaseOrder, $data, $user): PurchaseOrder {
+        $result = DB::transaction(function () use ($purchaseOrder, $data, $user): array {
             $lockedPurchaseOrder = $this->lockedPurchaseOrder($purchaseOrder);
 
             if (! $lockedPurchaseOrder->isApproved() && ! $lockedPurchaseOrder->isPartiallyReceived()) {
@@ -286,6 +287,7 @@ class PurchaseOrderService
 
             $receiveQuantities = $this->receiveQuantities($data['items'] ?? []);
             $lockedItems = PurchaseOrderItem::query()
+                ->with('product')
                 ->where('purchase_order_id', $lockedPurchaseOrder->id)
                 ->lockForUpdate()
                 ->get()
@@ -310,6 +312,14 @@ class PurchaseOrderService
                 ]);
             }
 
+            $oldValues = [
+                'status' => $lockedPurchaseOrder->status,
+                'items' => $this->receivingItemsBeforeValues($lockedItems, $positiveReceiveQuantities),
+            ];
+            $receivedItems = [];
+            $movementIds = [];
+            $totalReceivedNow = 0.0;
+
             foreach ($positiveReceiveQuantities as $purchaseOrderItemId => $receivedQuantity) {
                 /** @var PurchaseOrderItem $item */
                 $item = $lockedItems->get($purchaseOrderItemId);
@@ -321,10 +331,12 @@ class PurchaseOrderService
                     ]);
                 }
 
+                $receivedQuantityBefore = (float) $item->received_quantity;
                 $newReceivedQuantity = round((float) $item->received_quantity + $receivedQuantity, 3);
                 $item->update([
                     'received_quantity' => $newReceivedQuantity,
                 ]);
+                $totalReceivedNow = round($totalReceivedNow + $receivedQuantity, 3);
 
                 $stock = $this->lockedWarehouseStock((int) $lockedPurchaseOrder->warehouse_id, (int) $item->product_id);
                 $balanceAfter = round((float) $stock->quantity + $receivedQuantity, 4);
@@ -333,7 +345,7 @@ class PurchaseOrderService
                     'quantity' => $balanceAfter,
                 ]);
 
-                StockMovement::create([
+                $stockMovement = StockMovement::create([
                     'warehouse_id' => $lockedPurchaseOrder->warehouse_id,
                     'product_id' => $item->product_id,
                     'movement_type' => 'purchase_in',
@@ -344,6 +356,17 @@ class PurchaseOrderService
                     'remarks' => 'Purchase order received: '.$lockedPurchaseOrder->po_number,
                     'created_by' => $user->id,
                 ]);
+                $movementIds[] = $stockMovement->id;
+
+                $receivedItems[] = [
+                    'purchase_order_item_id' => $item->id,
+                    'product_id' => $item->product_id,
+                    'product_name' => $item->product?->name,
+                    'ordered_quantity' => $item->quantity,
+                    'received_quantity_before' => $this->formatQuantity($receivedQuantityBefore),
+                    'received_now' => $this->formatQuantity($receivedQuantity),
+                    'received_quantity_after' => $this->formatQuantity($newReceivedQuantity),
+                ];
             }
 
             $updateData = [
@@ -370,8 +393,49 @@ class PurchaseOrderService
 
             $lockedPurchaseOrder->update($updateData);
 
-            return $this->loadPurchaseOrder($lockedPurchaseOrder);
+            $receivedPurchaseOrder = $this->loadPurchaseOrder($lockedPurchaseOrder);
+            $newValues = [
+                'status' => $receivedPurchaseOrder->status,
+                'items' => $receivedItems,
+                'total_received_now' => $this->formatQuantity($totalReceivedNow),
+            ];
+
+            if ($receivedPurchaseOrder->received_at !== null) {
+                $newValues['received_at'] = $receivedPurchaseOrder->received_at->toDateTimeString();
+            }
+
+            if ($receivedPurchaseOrder->received_by !== null) {
+                $newValues['received_by'] = $receivedPurchaseOrder->received_by;
+            }
+
+            if ($receivingNotes !== '') {
+                $newValues['receiving_notes'] = $receivingNotes;
+            }
+
+            return [
+                'purchase_order' => $receivedPurchaseOrder,
+                'old_values' => $oldValues,
+                'new_values' => $newValues,
+                'metadata' => array_merge($this->auditMetadata($receivedPurchaseOrder), [
+                    'movement_ids' => $movementIds,
+                ]),
+            ];
         });
+
+        /** @var PurchaseOrder $receivedPurchaseOrder */
+        $receivedPurchaseOrder = $result['purchase_order'];
+
+        $this->auditLogService->record(
+            event: 'received',
+            module: 'purchase_orders',
+            auditable: $receivedPurchaseOrder,
+            description: sprintf('Purchase order "%s" was received.', $receivedPurchaseOrder->po_number),
+            oldValues: $result['old_values'],
+            newValues: $result['new_values'],
+            metadata: $result['metadata'],
+        );
+
+        return $receivedPurchaseOrder;
     }
 
     public function delete(PurchaseOrder $purchaseOrder): void
@@ -621,6 +685,31 @@ class PurchaseOrderService
     private function formatQuantity(float $quantity): string
     {
         return number_format($quantity, 3, '.', '');
+    }
+
+    /**
+     * @param  Collection<int, PurchaseOrderItem>  $items
+     * @param  array<int, float>  $receiveQuantities
+     * @return list<array<string, mixed>>
+     */
+    private function receivingItemsBeforeValues(Collection $items, array $receiveQuantities): array
+    {
+        $values = [];
+
+        foreach (array_keys($receiveQuantities) as $purchaseOrderItemId) {
+            /** @var PurchaseOrderItem $item */
+            $item = $items->get($purchaseOrderItemId);
+
+            $values[] = [
+                'purchase_order_item_id' => $item->id,
+                'product_id' => $item->product_id,
+                'product_name' => $item->product?->name,
+                'ordered_quantity' => $item->quantity,
+                'received_quantity_before' => $this->formatQuantity((float) $item->received_quantity),
+            ];
+        }
+
+        return $values;
     }
 
     /**

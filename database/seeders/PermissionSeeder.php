@@ -50,6 +50,7 @@ class PermissionSeeder extends Seeder
             ['slug' => 'stock-in.create', 'name' => 'Create Stock In', 'module' => 'stock'],
             ['slug' => 'stock-out.view', 'name' => 'View Stock Out', 'module' => 'stock'],
             ['slug' => 'stock-out.create', 'name' => 'Create Stock Out', 'module' => 'stock'],
+            ['slug' => 'stock-transfer.view', 'name' => 'View Stock Transfer', 'module' => 'stock'],
             ['slug' => 'stock-transfer.create', 'name' => 'Create Stock Transfer', 'module' => 'stock'],
             ['slug' => 'reports.view', 'name' => 'View Reports', 'module' => 'reports'],
             ['slug' => 'audit-logs.view', 'name' => 'View Audit Logs', 'module' => 'audit_logs'],

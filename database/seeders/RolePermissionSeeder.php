@@ -37,6 +37,7 @@ class RolePermissionSeeder extends Seeder
                 'stock-in.create',
                 'stock-out.view',
                 'stock-out.create',
+                'stock-transfer.view',
                 'stock-transfer.create',
             ])
             ->pluck('id')

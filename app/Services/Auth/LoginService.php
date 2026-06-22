@@ -3,6 +3,8 @@
 namespace App\Services\Auth;
 
 use App\Http\Requests\Auth\LoginRequest;
+use App\Models\User;
+use App\Services\Audit\AuditLogService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\RateLimiter;
@@ -13,6 +15,11 @@ class LoginService
     private const MAX_ATTEMPTS = 5;
 
     private const LOCKOUT_SECONDS = 60;
+
+    public function __construct(
+        private readonly AuditLogService $auditLogService,
+    ) {
+    }
 
     /**
      * Attempt to authenticate the user and regenerate the session.
@@ -34,10 +41,37 @@ class LoginService
         RateLimiter::clear($request->throttleKey());
 
         $request->session()->regenerate();
+
+        $user = Auth::user();
+
+        if ($user instanceof User) {
+            $this->auditLogService->record(
+                event: 'login',
+                module: 'auth',
+                auditable: $user,
+                description: 'User logged in.',
+                metadata: [
+                    'email' => (string) $request->string('email')->trim(),
+                ],
+                user: $user,
+            );
+        }
     }
 
     public function logout(Request $request): void
     {
+        $user = $request->user();
+
+        if ($user instanceof User) {
+            $this->auditLogService->record(
+                event: 'logout',
+                module: 'auth',
+                auditable: $user,
+                description: 'User logged out.',
+                user: $user,
+            );
+        }
+
         Auth::guard('web')->logout();
 
         $request->session()->invalidate();

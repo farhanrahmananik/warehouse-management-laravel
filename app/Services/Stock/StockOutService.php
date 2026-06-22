@@ -10,6 +10,7 @@ use App\Models\StockOut;
 use App\Models\User;
 use App\Models\Warehouse;
 use App\Models\WarehouseStock;
+use App\Services\Audit\AuditLogService;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
@@ -19,6 +20,11 @@ use Illuminate\Validation\ValidationException;
 class StockOutService
 {
     private const DOCUMENT_NUMBER_ATTEMPTS = 100;
+
+    public function __construct(
+        private readonly AuditLogService $auditLogService,
+    ) {
+    }
 
     /**
      * @param  array{warehouse_id?: int|string|null, product_id?: int|string|null, date_from?: string|null, date_to?: string|null}  $filters
@@ -68,7 +74,7 @@ class StockOutService
      */
     public function create(array $data, User $user): StockOut
     {
-        return DB::transaction(function () use ($data, $user): StockOut {
+        $result = DB::transaction(function () use ($data, $user): array {
             $stockOut = StockOut::query()->create([
                 'document_no' => $this->generateDocumentNo(),
                 'warehouse_id' => $data['warehouse_id'],
@@ -76,6 +82,7 @@ class StockOutService
                 'remarks' => $data['remarks'] ?? null,
                 'created_by' => $user->id,
             ]);
+            $movementIds = [];
 
             foreach ($data['items'] as $index => $item) {
                 $quantity = round((float) $item['quantity'], 4);
@@ -105,7 +112,7 @@ class StockOutService
                     'quantity' => $balanceAfter,
                 ]);
 
-                StockMovement::query()->create([
+                $movement = StockMovement::query()->create([
                     'warehouse_id' => $stockOut->warehouse_id,
                     'product_id' => $item['product_id'],
                     'movement_type' => 'stock_out',
@@ -116,10 +123,38 @@ class StockOutService
                     'remarks' => $itemRemarks ?: ($data['remarks'] ?? null),
                     'created_by' => $user->id,
                 ]);
+
+                $movementIds[] = $movement->id;
             }
 
-            return $this->loadForShow($stockOut);
+            return [
+                'stock_out' => $this->loadForShow($stockOut),
+                'movement_ids' => $movementIds,
+            ];
         });
+
+        /** @var StockOut $stockOut */
+        $stockOut = $result['stock_out'];
+
+        $this->auditLogService->record(
+            event: 'stock_out_created',
+            module: 'stock_outs',
+            auditable: $stockOut,
+            description: sprintf(
+                'Stock out "%s" was created from warehouse "%s".',
+                $stockOut->document_no,
+                $stockOut->warehouse?->name ?? 'Unknown Warehouse',
+            ),
+            newValues: $this->auditValues($stockOut),
+            metadata: [
+                'model' => 'stock_out',
+                'stock_out_id' => $stockOut->id,
+                'warehouse_id' => $stockOut->warehouse_id,
+                'movement_ids' => $result['movement_ids'],
+            ],
+        );
+
+        return $stockOut;
     }
 
     public function loadForShow(StockOut $stockOut): StockOut
@@ -197,6 +232,38 @@ class StockOutService
                 'items.'.$itemIndex.'.quantity' => 'Stock quantity cannot be lower than reserved quantity.',
             ]);
         }
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function auditValues(StockOut $stockOut): array
+    {
+        return [
+            'stock_out_id' => $stockOut->id,
+            'reference_no' => $stockOut->document_no,
+            'warehouse_id' => $stockOut->warehouse_id,
+            'warehouse_name' => $stockOut->warehouse?->name,
+            'stock_out_date' => $stockOut->stock_date?->toDateString(),
+            'total_items' => $stockOut->items->count(),
+            'total_quantity' => $this->formatQuantity((float) $stockOut->items->sum(
+                fn ($item): float => (float) $item->quantity
+            )),
+            'remarks' => $stockOut->remarks,
+            'items' => $stockOut->items->map(function ($item): array {
+                return [
+                    'product_id' => $item->product_id,
+                    'product_name' => $item->product?->name,
+                    'quantity' => $item->quantity,
+                    'remarks' => $item->remarks,
+                ];
+            })->values()->all(),
+        ];
+    }
+
+    private function formatQuantity(float $quantity): string
+    {
+        return number_format($quantity, 4, '.', '');
     }
 
     /**

@@ -8,6 +8,7 @@ use App\Models\Product;
 use App\Models\StockMovement;
 use App\Models\Warehouse;
 use App\Models\WarehouseStock;
+use App\Services\Audit\AuditLogService;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
@@ -20,12 +21,17 @@ class StockAdjustmentService
 
     public const MOVEMENT_ADJUSTMENT_OUT = 'adjustment_out';
 
+    public function __construct(
+        private readonly AuditLogService $auditLogService,
+    ) {
+    }
+
     /**
      * @param  array{warehouse_id: int|string, product_id: int|string, movement_type: string, quantity: int|float|string, remarks?: string|null}  $data
      */
     public function create(array $data, int $createdBy): WarehouseStock
     {
-        return DB::transaction(function () use ($data, $createdBy): WarehouseStock {
+        $result = DB::transaction(function () use ($data, $createdBy): array {
             $warehouseId = (int) $data['warehouse_id'];
             $productId = (int) $data['product_id'];
             $movementType = (string) $data['movement_type'];
@@ -51,7 +57,7 @@ class StockAdjustmentService
                 'quantity' => $balanceAfter,
             ]);
 
-            StockMovement::create([
+            $movement = StockMovement::create([
                 'warehouse_id' => $warehouseId,
                 'product_id' => $productId,
                 'movement_type' => $movementType,
@@ -63,8 +69,48 @@ class StockAdjustmentService
                 'created_by' => $createdBy,
             ]);
 
-            return $stock->refresh();
+            return [
+                'stock' => $stock->refresh(),
+                'movement' => $movement,
+                'previous_quantity' => $currentQuantity,
+                'new_quantity' => $balanceAfter,
+            ];
         });
+
+        /** @var WarehouseStock $stock */
+        $stock = $result['stock'];
+        /** @var StockMovement $movement */
+        $movement = $result['movement'];
+        $movement->loadMissing(['warehouse', 'product']);
+
+        $this->auditLogService->record(
+            event: 'stock_adjusted',
+            module: 'stock_adjustments',
+            auditable: $movement,
+            description: sprintf(
+                'Stock adjustment was recorded for product "%s" in warehouse "%s".',
+                $movement->product?->name ?? 'Unknown Product',
+                $movement->warehouse?->name ?? 'Unknown Warehouse',
+            ),
+            newValues: [
+                'warehouse_id' => $movement->warehouse_id,
+                'warehouse_name' => $movement->warehouse?->name,
+                'product_id' => $movement->product_id,
+                'product_name' => $movement->product?->name,
+                'movement_type' => $movement->movement_type,
+                'quantity' => $movement->quantity,
+                'previous_quantity' => $this->formatQuantity((float) $result['previous_quantity']),
+                'new_quantity' => $this->formatQuantity((float) $result['new_quantity']),
+                'remarks' => $movement->remarks,
+            ],
+            metadata: [
+                'model' => 'stock_adjustment',
+                'stock_movement_id' => $movement->id,
+                'warehouse_stock_id' => $stock->id,
+            ],
+        );
+
+        return $stock;
     }
 
     public function activeWarehouses(): Collection
@@ -144,5 +190,10 @@ class StockAdjustmentService
                 'quantity' => 'Stock quantity cannot be lower than reserved quantity.',
             ]);
         }
+    }
+
+    private function formatQuantity(float $quantity): string
+    {
+        return number_format($quantity, 4, '.', '');
     }
 }

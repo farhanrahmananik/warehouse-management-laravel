@@ -94,6 +94,11 @@ class User extends Authenticatable
         return $this->hasMany(StockTransfer::class, 'created_by');
     }
 
+    public function auditLogs(): HasMany
+    {
+        return $this->hasMany(AuditLog::class);
+    }
+
     public function hasRole(string $role): bool
     {
         return $this->roles()

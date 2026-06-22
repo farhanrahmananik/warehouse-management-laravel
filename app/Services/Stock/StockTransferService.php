@@ -10,6 +10,7 @@ use App\Models\StockTransfer;
 use App\Models\User;
 use App\Models\Warehouse;
 use App\Models\WarehouseStock;
+use App\Services\Audit\AuditLogService;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
@@ -19,6 +20,11 @@ use Illuminate\Validation\ValidationException;
 class StockTransferService
 {
     private const DOCUMENT_NUMBER_ATTEMPTS = 100;
+
+    public function __construct(
+        private readonly AuditLogService $auditLogService,
+    ) {
+    }
 
     /**
      * @param  array{from_warehouse_id?: int|string|null, to_warehouse_id?: int|string|null, product_id?: int|string|null, date_from?: string|null, date_to?: string|null}  $filters
@@ -71,7 +77,7 @@ class StockTransferService
      */
     public function create(array $data, User $user): StockTransfer
     {
-        return DB::transaction(function () use ($data, $user): StockTransfer {
+        $result = DB::transaction(function () use ($data, $user): array {
             $fromWarehouseId = (int) $data['from_warehouse_id'];
             $toWarehouseId = (int) $data['to_warehouse_id'];
 
@@ -89,6 +95,7 @@ class StockTransferService
                 'remarks' => $data['remarks'] ?? null,
                 'created_by' => $user->id,
             ]);
+            $movementIds = [];
 
             foreach ($data['items'] as $index => $item) {
                 $productId = (int) $item['product_id'];
@@ -133,7 +140,7 @@ class StockTransferService
 
                 $remarks = $itemRemarks ?: ($data['remarks'] ?? null);
 
-                StockMovement::query()->create([
+                $transferOutMovement = StockMovement::query()->create([
                     'warehouse_id' => $fromWarehouseId,
                     'product_id' => $productId,
                     'movement_type' => 'transfer_out',
@@ -145,7 +152,7 @@ class StockTransferService
                     'created_by' => $user->id,
                 ]);
 
-                StockMovement::query()->create([
+                $transferInMovement = StockMovement::query()->create([
                     'warehouse_id' => $toWarehouseId,
                     'product_id' => $productId,
                     'movement_type' => 'transfer_in',
@@ -156,10 +163,41 @@ class StockTransferService
                     'remarks' => $remarks,
                     'created_by' => $user->id,
                 ]);
+
+                $movementIds[] = $transferOutMovement->id;
+                $movementIds[] = $transferInMovement->id;
             }
 
-            return $this->loadForShow($stockTransfer);
+            return [
+                'stock_transfer' => $this->loadForShow($stockTransfer),
+                'movement_ids' => $movementIds,
+            ];
         });
+
+        /** @var StockTransfer $stockTransfer */
+        $stockTransfer = $result['stock_transfer'];
+
+        $this->auditLogService->record(
+            event: 'stock_transfer_created',
+            module: 'stock_transfers',
+            auditable: $stockTransfer,
+            description: sprintf(
+                'Stock transfer "%s" was created from warehouse "%s" to warehouse "%s".',
+                $stockTransfer->document_no,
+                $stockTransfer->fromWarehouse?->name ?? 'Unknown Source Warehouse',
+                $stockTransfer->toWarehouse?->name ?? 'Unknown Destination Warehouse',
+            ),
+            newValues: $this->auditValues($stockTransfer),
+            metadata: [
+                'model' => 'stock_transfer',
+                'stock_transfer_id' => $stockTransfer->id,
+                'source_warehouse_id' => $stockTransfer->from_warehouse_id,
+                'destination_warehouse_id' => $stockTransfer->to_warehouse_id,
+                'movement_ids' => $result['movement_ids'],
+            ],
+        );
+
+        return $stockTransfer;
     }
 
     public function loadForShow(StockTransfer $stockTransfer): StockTransfer
@@ -268,6 +306,40 @@ class StockTransferService
                 'items.'.$itemIndex.'.quantity' => 'Source stock quantity cannot be lower than reserved quantity.',
             ]);
         }
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function auditValues(StockTransfer $stockTransfer): array
+    {
+        return [
+            'stock_transfer_id' => $stockTransfer->id,
+            'reference_no' => $stockTransfer->document_no,
+            'source_warehouse_id' => $stockTransfer->from_warehouse_id,
+            'source_warehouse_name' => $stockTransfer->fromWarehouse?->name,
+            'destination_warehouse_id' => $stockTransfer->to_warehouse_id,
+            'destination_warehouse_name' => $stockTransfer->toWarehouse?->name,
+            'transfer_date' => $stockTransfer->transfer_date?->toDateString(),
+            'total_items' => $stockTransfer->items->count(),
+            'total_quantity' => $this->formatQuantity((float) $stockTransfer->items->sum(
+                fn ($item): float => (float) $item->quantity
+            )),
+            'remarks' => $stockTransfer->remarks,
+            'items' => $stockTransfer->items->map(function ($item): array {
+                return [
+                    'product_id' => $item->product_id,
+                    'product_name' => $item->product?->name,
+                    'quantity' => $item->quantity,
+                    'remarks' => $item->remarks,
+                ];
+            })->values()->all(),
+        ];
+    }
+
+    private function formatQuantity(float $quantity): string
+    {
+        return number_format($quantity, 4, '.', '');
     }
 
     /**

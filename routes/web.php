@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Auth\AuthenticatedSessionController;
+use App\Http\Controllers\AuditLogController;
 use App\Http\Controllers\Catalog\CategoryController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\Catalog\ProductController;
@@ -172,6 +173,13 @@ Route::middleware('auth')->group(function () {
     Route::get('/reports/purchase-orders', [ReportController::class, 'purchaseOrders'])
         ->middleware('permission:reports.purchase-orders.view')
         ->name('reports.purchase-orders');
+
+    Route::get('/audit-logs', [AuditLogController::class, 'index'])
+        ->middleware('permission:audit_logs.view')
+        ->name('audit-logs.index');
+    Route::get('/audit-logs/{auditLog}', [AuditLogController::class, 'show'])
+        ->middleware('permission:audit_logs.view')
+        ->name('audit-logs.show');
 
     Route::get('/stock', [StockController::class, 'index'])
         ->middleware('permission:stock.view')

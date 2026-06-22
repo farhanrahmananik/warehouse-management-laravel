@@ -10,6 +10,7 @@ use App\Models\StockMovement;
 use App\Models\User;
 use App\Models\Warehouse;
 use App\Models\WarehouseStock;
+use App\Services\Audit\AuditLogService;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
@@ -19,6 +20,11 @@ use Illuminate\Validation\ValidationException;
 class StockInService
 {
     private const DOCUMENT_NUMBER_ATTEMPTS = 100;
+
+    public function __construct(
+        private readonly AuditLogService $auditLogService,
+    ) {
+    }
 
     /**
      * @param  array{warehouse_id?: int|string|null, product_id?: int|string|null, date_from?: string|null, date_to?: string|null}  $filters
@@ -68,7 +74,7 @@ class StockInService
      */
     public function create(array $data, User $user): StockIn
     {
-        return DB::transaction(function () use ($data, $user): StockIn {
+        $result = DB::transaction(function () use ($data, $user): array {
             $stockIn = StockIn::query()->create([
                 'document_no' => $this->generateDocumentNo(),
                 'warehouse_id' => $data['warehouse_id'],
@@ -76,6 +82,7 @@ class StockInService
                 'remarks' => $data['remarks'] ?? null,
                 'created_by' => $user->id,
             ]);
+            $movementIds = [];
 
             foreach ($data['items'] as $item) {
                 $quantity = round((float) $item['quantity'], 4);
@@ -94,7 +101,7 @@ class StockInService
                     'quantity' => $balanceAfter,
                 ]);
 
-                StockMovement::query()->create([
+                $movement = StockMovement::query()->create([
                     'warehouse_id' => $stockIn->warehouse_id,
                     'product_id' => $item['product_id'],
                     'movement_type' => 'stock_in',
@@ -105,10 +112,38 @@ class StockInService
                     'remarks' => $itemRemarks ?: ($data['remarks'] ?? null),
                     'created_by' => $user->id,
                 ]);
+
+                $movementIds[] = $movement->id;
             }
 
-            return $this->loadForShow($stockIn);
+            return [
+                'stock_in' => $this->loadForShow($stockIn),
+                'movement_ids' => $movementIds,
+            ];
         });
+
+        /** @var StockIn $stockIn */
+        $stockIn = $result['stock_in'];
+
+        $this->auditLogService->record(
+            event: 'stock_in_created',
+            module: 'stock_ins',
+            auditable: $stockIn,
+            description: sprintf(
+                'Stock in "%s" was created for warehouse "%s".',
+                $stockIn->document_no,
+                $stockIn->warehouse?->name ?? 'Unknown Warehouse',
+            ),
+            newValues: $this->auditValues($stockIn),
+            metadata: [
+                'model' => 'stock_in',
+                'stock_in_id' => $stockIn->id,
+                'warehouse_id' => $stockIn->warehouse_id,
+                'movement_ids' => $result['movement_ids'],
+            ],
+        );
+
+        return $stockIn;
     }
 
     public function loadForShow(StockIn $stockIn): StockIn
@@ -180,6 +215,38 @@ class StockInService
             ->where('product_id', $productId)
             ->lockForUpdate()
             ->firstOrFail();
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function auditValues(StockIn $stockIn): array
+    {
+        return [
+            'stock_in_id' => $stockIn->id,
+            'reference_no' => $stockIn->document_no,
+            'warehouse_id' => $stockIn->warehouse_id,
+            'warehouse_name' => $stockIn->warehouse?->name,
+            'stock_in_date' => $stockIn->stock_date?->toDateString(),
+            'total_items' => $stockIn->items->count(),
+            'total_quantity' => $this->formatQuantity((float) $stockIn->items->sum(
+                fn ($item): float => (float) $item->quantity
+            )),
+            'remarks' => $stockIn->remarks,
+            'items' => $stockIn->items->map(function ($item): array {
+                return [
+                    'product_id' => $item->product_id,
+                    'product_name' => $item->product?->name,
+                    'quantity' => $item->quantity,
+                    'remarks' => $item->remarks,
+                ];
+            })->values()->all(),
+        ];
+    }
+
+    private function formatQuantity(float $quantity): string
+    {
+        return number_format($quantity, 4, '.', '');
     }
 
     /**

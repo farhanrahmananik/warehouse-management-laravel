@@ -9,8 +9,10 @@ use App\Models\PurchaseOrderItem;
 use App\Models\StockMovement;
 use App\Models\User;
 use App\Models\WarehouseStock;
+use App\Services\Audit\AuditLogService;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
@@ -18,6 +20,11 @@ use Illuminate\Validation\ValidationException;
 class PurchaseOrderService
 {
     private const PO_NUMBER_ATTEMPTS = 25;
+
+    public function __construct(
+        private readonly AuditLogService $auditLogService,
+    ) {
+    }
 
     /**
      * @param  array{status?: string|null, supplier_id?: int|string|null, warehouse_id?: int|string|null, date_from?: string|null, date_to?: string|null}  $filters
@@ -52,7 +59,7 @@ class PurchaseOrderService
      */
     public function create(array $data, User $user): PurchaseOrder
     {
-        return DB::transaction(function () use ($data, $user): PurchaseOrder {
+        $purchaseOrder = DB::transaction(function () use ($data, $user): PurchaseOrder {
             $totals = $this->calculateTotals($data['items'] ?? [], $data);
 
             $purchaseOrder = PurchaseOrder::create([
@@ -75,6 +82,17 @@ class PurchaseOrderService
 
             return $this->loadPurchaseOrder($purchaseOrder);
         });
+
+        $this->auditLogService->record(
+            event: 'created',
+            module: 'purchase_orders',
+            auditable: $purchaseOrder,
+            description: sprintf('Purchase order "%s" was created.', $purchaseOrder->po_number),
+            newValues: $this->auditValues($purchaseOrder),
+            metadata: $this->auditMetadata($purchaseOrder),
+        );
+
+        return $purchaseOrder;
     }
 
     /**
@@ -82,7 +100,7 @@ class PurchaseOrderService
      */
     public function update(PurchaseOrder $purchaseOrder, array $data): PurchaseOrder
     {
-        return DB::transaction(function () use ($purchaseOrder, $data): PurchaseOrder {
+        $result = DB::transaction(function () use ($purchaseOrder, $data): array {
             $lockedPurchaseOrder = $this->lockedPurchaseOrder($purchaseOrder);
 
             if (! $lockedPurchaseOrder->isDraft()) {
@@ -91,6 +109,7 @@ class PurchaseOrderService
                 ]);
             }
 
+            $oldValues = $this->auditValues($this->loadPurchaseOrder($lockedPurchaseOrder));
             $totals = $this->calculateTotals($data['items'] ?? [], $data);
 
             $lockedPurchaseOrder->update([
@@ -108,13 +127,40 @@ class PurchaseOrderService
 
             $this->replaceItems($lockedPurchaseOrder, $totals['items']);
 
-            return $this->loadPurchaseOrder($lockedPurchaseOrder);
+            $updatedPurchaseOrder = $this->loadPurchaseOrder($lockedPurchaseOrder);
+            [$changedOldValues, $changedNewValues] = $this->changedAuditValues(
+                $oldValues,
+                $this->auditValues($updatedPurchaseOrder),
+            );
+
+            return [
+                'purchase_order' => $updatedPurchaseOrder,
+                'old_values' => $changedOldValues,
+                'new_values' => $changedNewValues,
+            ];
         });
+
+        /** @var PurchaseOrder $updatedPurchaseOrder */
+        $updatedPurchaseOrder = $result['purchase_order'];
+
+        if ($result['new_values'] !== []) {
+            $this->auditLogService->record(
+                event: 'updated',
+                module: 'purchase_orders',
+                auditable: $updatedPurchaseOrder,
+                description: sprintf('Purchase order "%s" was updated.', $updatedPurchaseOrder->po_number),
+                oldValues: $result['old_values'],
+                newValues: $result['new_values'],
+                metadata: $this->auditMetadata($updatedPurchaseOrder),
+            );
+        }
+
+        return $updatedPurchaseOrder;
     }
 
     public function approve(PurchaseOrder $purchaseOrder, User $user): PurchaseOrder
     {
-        return DB::transaction(function () use ($purchaseOrder, $user): PurchaseOrder {
+        $result = DB::transaction(function () use ($purchaseOrder, $user): array {
             $lockedPurchaseOrder = $this->lockedPurchaseOrder($purchaseOrder);
 
             if (! $lockedPurchaseOrder->isDraft()) {
@@ -123,19 +169,48 @@ class PurchaseOrderService
                 ]);
             }
 
+            $oldValues = [
+                'status' => $lockedPurchaseOrder->status,
+            ];
+
             $lockedPurchaseOrder->update([
                 'status' => PurchaseOrder::STATUS_APPROVED,
                 'approved_at' => now(),
                 'approved_by' => $user->id,
             ]);
 
-            return $this->loadPurchaseOrder($lockedPurchaseOrder);
+            $approvedPurchaseOrder = $this->loadPurchaseOrder($lockedPurchaseOrder);
+
+            return [
+                'purchase_order' => $approvedPurchaseOrder,
+                'old_values' => $oldValues,
+                'new_values' => [
+                    'status' => $approvedPurchaseOrder->status,
+                    'approved_at' => $approvedPurchaseOrder->approved_at?->toDateTimeString(),
+                    'approved_by' => $approvedPurchaseOrder->approved_by,
+                ],
+            ];
         });
+
+        /** @var PurchaseOrder $approvedPurchaseOrder */
+        $approvedPurchaseOrder = $result['purchase_order'];
+
+        $this->auditLogService->record(
+            event: 'approved',
+            module: 'purchase_orders',
+            auditable: $approvedPurchaseOrder,
+            description: sprintf('Purchase order "%s" was approved.', $approvedPurchaseOrder->po_number),
+            oldValues: $result['old_values'],
+            newValues: $result['new_values'],
+            metadata: $this->auditMetadata($approvedPurchaseOrder),
+        );
+
+        return $approvedPurchaseOrder;
     }
 
     public function cancel(PurchaseOrder $purchaseOrder, User $user, ?string $notes = null): PurchaseOrder
     {
-        return DB::transaction(function () use ($purchaseOrder, $user, $notes): PurchaseOrder {
+        $result = DB::transaction(function () use ($purchaseOrder, $user, $notes): array {
             $lockedPurchaseOrder = $this->lockedPurchaseOrder($purchaseOrder);
 
             if (! $lockedPurchaseOrder->isDraft() && ! $lockedPurchaseOrder->isApproved()) {
@@ -143,6 +218,11 @@ class PurchaseOrderService
                     'status' => 'Only draft or approved purchase orders can be cancelled.',
                 ]);
             }
+
+            $oldValues = [
+                'status' => $lockedPurchaseOrder->status,
+                'notes' => $lockedPurchaseOrder->notes,
+            ];
 
             $data = [
                 'status' => PurchaseOrder::STATUS_CANCELLED,
@@ -161,8 +241,34 @@ class PurchaseOrderService
 
             $lockedPurchaseOrder->update($data);
 
-            return $this->loadPurchaseOrder($lockedPurchaseOrder);
+            $cancelledPurchaseOrder = $this->loadPurchaseOrder($lockedPurchaseOrder);
+
+            return [
+                'purchase_order' => $cancelledPurchaseOrder,
+                'old_values' => $oldValues,
+                'new_values' => [
+                    'status' => $cancelledPurchaseOrder->status,
+                    'cancelled_at' => $cancelledPurchaseOrder->cancelled_at?->toDateTimeString(),
+                    'cancelled_by' => $cancelledPurchaseOrder->cancelled_by,
+                    'notes' => $cancelledPurchaseOrder->notes,
+                ],
+            ];
         });
+
+        /** @var PurchaseOrder $cancelledPurchaseOrder */
+        $cancelledPurchaseOrder = $result['purchase_order'];
+
+        $this->auditLogService->record(
+            event: 'cancelled',
+            module: 'purchase_orders',
+            auditable: $cancelledPurchaseOrder,
+            description: sprintf('Purchase order "%s" was cancelled.', $cancelledPurchaseOrder->po_number),
+            oldValues: $result['old_values'],
+            newValues: $result['new_values'],
+            metadata: $this->auditMetadata($cancelledPurchaseOrder),
+        );
+
+        return $cancelledPurchaseOrder;
     }
 
     /**
@@ -170,7 +276,7 @@ class PurchaseOrderService
      */
     public function receive(PurchaseOrder $purchaseOrder, array $data, User $user): PurchaseOrder
     {
-        return DB::transaction(function () use ($purchaseOrder, $data, $user): PurchaseOrder {
+        $result = DB::transaction(function () use ($purchaseOrder, $data, $user): array {
             $lockedPurchaseOrder = $this->lockedPurchaseOrder($purchaseOrder);
 
             if (! $lockedPurchaseOrder->isApproved() && ! $lockedPurchaseOrder->isPartiallyReceived()) {
@@ -181,6 +287,7 @@ class PurchaseOrderService
 
             $receiveQuantities = $this->receiveQuantities($data['items'] ?? []);
             $lockedItems = PurchaseOrderItem::query()
+                ->with('product')
                 ->where('purchase_order_id', $lockedPurchaseOrder->id)
                 ->lockForUpdate()
                 ->get()
@@ -205,6 +312,14 @@ class PurchaseOrderService
                 ]);
             }
 
+            $oldValues = [
+                'status' => $lockedPurchaseOrder->status,
+                'items' => $this->receivingItemsBeforeValues($lockedItems, $positiveReceiveQuantities),
+            ];
+            $receivedItems = [];
+            $movementIds = [];
+            $totalReceivedNow = 0.0;
+
             foreach ($positiveReceiveQuantities as $purchaseOrderItemId => $receivedQuantity) {
                 /** @var PurchaseOrderItem $item */
                 $item = $lockedItems->get($purchaseOrderItemId);
@@ -216,10 +331,12 @@ class PurchaseOrderService
                     ]);
                 }
 
+                $receivedQuantityBefore = (float) $item->received_quantity;
                 $newReceivedQuantity = round((float) $item->received_quantity + $receivedQuantity, 3);
                 $item->update([
                     'received_quantity' => $newReceivedQuantity,
                 ]);
+                $totalReceivedNow = round($totalReceivedNow + $receivedQuantity, 3);
 
                 $stock = $this->lockedWarehouseStock((int) $lockedPurchaseOrder->warehouse_id, (int) $item->product_id);
                 $balanceAfter = round((float) $stock->quantity + $receivedQuantity, 4);
@@ -228,7 +345,7 @@ class PurchaseOrderService
                     'quantity' => $balanceAfter,
                 ]);
 
-                StockMovement::create([
+                $stockMovement = StockMovement::create([
                     'warehouse_id' => $lockedPurchaseOrder->warehouse_id,
                     'product_id' => $item->product_id,
                     'movement_type' => 'purchase_in',
@@ -239,6 +356,17 @@ class PurchaseOrderService
                     'remarks' => 'Purchase order received: '.$lockedPurchaseOrder->po_number,
                     'created_by' => $user->id,
                 ]);
+                $movementIds[] = $stockMovement->id;
+
+                $receivedItems[] = [
+                    'purchase_order_item_id' => $item->id,
+                    'product_id' => $item->product_id,
+                    'product_name' => $item->product?->name,
+                    'ordered_quantity' => $item->quantity,
+                    'received_quantity_before' => $this->formatQuantity($receivedQuantityBefore),
+                    'received_now' => $this->formatQuantity($receivedQuantity),
+                    'received_quantity_after' => $this->formatQuantity($newReceivedQuantity),
+                ];
             }
 
             $updateData = [
@@ -265,13 +393,54 @@ class PurchaseOrderService
 
             $lockedPurchaseOrder->update($updateData);
 
-            return $this->loadPurchaseOrder($lockedPurchaseOrder);
+            $receivedPurchaseOrder = $this->loadPurchaseOrder($lockedPurchaseOrder);
+            $newValues = [
+                'status' => $receivedPurchaseOrder->status,
+                'items' => $receivedItems,
+                'total_received_now' => $this->formatQuantity($totalReceivedNow),
+            ];
+
+            if ($receivedPurchaseOrder->received_at !== null) {
+                $newValues['received_at'] = $receivedPurchaseOrder->received_at->toDateTimeString();
+            }
+
+            if ($receivedPurchaseOrder->received_by !== null) {
+                $newValues['received_by'] = $receivedPurchaseOrder->received_by;
+            }
+
+            if ($receivingNotes !== '') {
+                $newValues['receiving_notes'] = $receivingNotes;
+            }
+
+            return [
+                'purchase_order' => $receivedPurchaseOrder,
+                'old_values' => $oldValues,
+                'new_values' => $newValues,
+                'metadata' => array_merge($this->auditMetadata($receivedPurchaseOrder), [
+                    'movement_ids' => $movementIds,
+                ]),
+            ];
         });
+
+        /** @var PurchaseOrder $receivedPurchaseOrder */
+        $receivedPurchaseOrder = $result['purchase_order'];
+
+        $this->auditLogService->record(
+            event: 'received',
+            module: 'purchase_orders',
+            auditable: $receivedPurchaseOrder,
+            description: sprintf('Purchase order "%s" was received.', $receivedPurchaseOrder->po_number),
+            oldValues: $result['old_values'],
+            newValues: $result['new_values'],
+            metadata: $result['metadata'],
+        );
+
+        return $receivedPurchaseOrder;
     }
 
     public function delete(PurchaseOrder $purchaseOrder): void
     {
-        DB::transaction(function () use ($purchaseOrder): void {
+        $result = DB::transaction(function () use ($purchaseOrder): array {
             $lockedPurchaseOrder = $this->lockedPurchaseOrder($purchaseOrder);
 
             if (! $lockedPurchaseOrder->isDraft() && ! $lockedPurchaseOrder->isCancelled()) {
@@ -280,8 +449,28 @@ class PurchaseOrderService
                 ]);
             }
 
+            $loadedPurchaseOrder = $this->loadPurchaseOrder($lockedPurchaseOrder);
+            $oldValues = $this->auditValues($loadedPurchaseOrder);
+
             $lockedPurchaseOrder->delete();
+
+            return [
+                'purchase_order' => $loadedPurchaseOrder,
+                'old_values' => $oldValues,
+            ];
         });
+
+        /** @var PurchaseOrder $deletedPurchaseOrder */
+        $deletedPurchaseOrder = $result['purchase_order'];
+
+        $this->auditLogService->record(
+            event: 'deleted',
+            module: 'purchase_orders',
+            auditable: $deletedPurchaseOrder,
+            description: sprintf('Purchase order "%s" was deleted.', $deletedPurchaseOrder->po_number),
+            oldValues: $result['old_values'],
+            metadata: $this->auditMetadata($deletedPurchaseOrder),
+        );
     }
 
     private function generatePoNumber(): string
@@ -413,6 +602,114 @@ class PurchaseOrderService
             ->where('product_id', $productId)
             ->lockForUpdate()
             ->firstOrFail();
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function auditValues(PurchaseOrder $purchaseOrder): array
+    {
+        $items = $purchaseOrder->items
+            ->sortBy('product_id')
+            ->values();
+
+        return [
+            'purchase_order_id' => $purchaseOrder->id,
+            'reference_no' => $purchaseOrder->po_number,
+            'supplier_id' => $purchaseOrder->supplier_id,
+            'supplier_name' => $purchaseOrder->supplier?->name,
+            'warehouse_id' => $purchaseOrder->warehouse_id,
+            'warehouse_name' => $purchaseOrder->warehouse?->name,
+            'order_date' => $purchaseOrder->order_date?->toDateString(),
+            'expected_date' => $purchaseOrder->expected_date?->toDateString(),
+            'status' => $purchaseOrder->status,
+            'notes' => $purchaseOrder->notes,
+            'subtotal' => $purchaseOrder->subtotal,
+            'discount_amount' => $purchaseOrder->discount_amount,
+            'tax_amount' => $purchaseOrder->tax_amount,
+            'shipping_amount' => $purchaseOrder->shipping_amount,
+            'total_amount' => $purchaseOrder->total_amount,
+            'total_items' => $items->count(),
+            'total_quantity' => $this->formatQuantity((float) $items->sum(
+                fn (PurchaseOrderItem $item): float => (float) $item->quantity
+            )),
+            'items' => $items->map(function (PurchaseOrderItem $item): array {
+                return [
+                    'product_id' => $item->product_id,
+                    'product_name' => $item->product?->name,
+                    'quantity' => $item->quantity,
+                    'received_quantity' => $item->received_quantity,
+                    'unit_price' => $item->unit_cost,
+                    'subtotal' => $item->line_total,
+                    'notes' => $item->notes,
+                ];
+            })->all(),
+        ];
+    }
+
+    /**
+     * @return array{model: string, purchase_order_id: int|null}
+     */
+    private function auditMetadata(PurchaseOrder $purchaseOrder): array
+    {
+        return [
+            'model' => 'purchase_order',
+            'purchase_order_id' => $purchaseOrder->id,
+        ];
+    }
+
+    /**
+     * @param  array<string, mixed>  $oldValues
+     * @param  array<string, mixed>  $newValues
+     * @return array{0: array<string, mixed>, 1: array<string, mixed>}
+     */
+    private function changedAuditValues(array $oldValues, array $newValues): array
+    {
+        $changedOldValues = [];
+        $changedNewValues = [];
+
+        foreach ($newValues as $field => $newValue) {
+            $oldValue = $oldValues[$field] ?? null;
+
+            if ($oldValue === $newValue) {
+                continue;
+            }
+
+            $changedOldValues[$field] = $oldValue;
+            $changedNewValues[$field] = $newValue;
+        }
+
+        return [$changedOldValues, $changedNewValues];
+    }
+
+    private function formatQuantity(float $quantity): string
+    {
+        return number_format($quantity, 3, '.', '');
+    }
+
+    /**
+     * @param  Collection<int, PurchaseOrderItem>  $items
+     * @param  array<int, float>  $receiveQuantities
+     * @return list<array<string, mixed>>
+     */
+    private function receivingItemsBeforeValues(Collection $items, array $receiveQuantities): array
+    {
+        $values = [];
+
+        foreach (array_keys($receiveQuantities) as $purchaseOrderItemId) {
+            /** @var PurchaseOrderItem $item */
+            $item = $items->get($purchaseOrderItemId);
+
+            $values[] = [
+                'purchase_order_item_id' => $item->id,
+                'product_id' => $item->product_id,
+                'product_name' => $item->product?->name,
+                'ordered_quantity' => $item->quantity,
+                'received_quantity_before' => $this->formatQuantity((float) $item->received_quantity),
+            ];
+        }
+
+        return $values;
     }
 
     /**

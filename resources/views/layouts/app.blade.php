@@ -218,6 +218,17 @@
                         @endcan
                     @endif
 
+                    @can('permission', 'audit_logs.view')
+                        <div class="small fw-semibold text-uppercase text-muted mt-4 mb-2">System</div>
+
+                        <a
+                            class="list-group-item list-group-item-action px-0 {{ request()->routeIs('audit-logs.*') ? 'active' : '' }}"
+                            href="{{ route('audit-logs.index') }}"
+                        >
+                            Audit Logs
+                        </a>
+                    @endcan
+
                     @can('role', 'super-admin')
                         <span class="badge text-bg-primary align-self-start my-3">Super Admin</span>
                     @endcan

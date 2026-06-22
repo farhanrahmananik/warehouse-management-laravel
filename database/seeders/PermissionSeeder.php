@@ -57,8 +57,14 @@ class PermissionSeeder extends Seeder
             ['slug' => 'reports.stock-movements.view', 'name' => 'View Stock Movement Reports', 'module' => 'reports'],
             ['slug' => 'reports.low-stock.view', 'name' => 'View Low Stock Reports', 'module' => 'reports'],
             ['slug' => 'reports.purchase-orders.view', 'name' => 'View Purchase Order Reports', 'module' => 'reports'],
-            ['slug' => 'audit-logs.view', 'name' => 'View Audit Logs', 'module' => 'audit_logs'],
+            ['slug' => 'audit_logs.view', 'name' => 'View Audit Logs', 'module' => 'audit_logs'],
         ];
+
+        if (! Permission::withTrashed()->where('slug', 'audit_logs.view')->exists()) {
+            Permission::withTrashed()
+                ->where('slug', 'audit-logs.view')
+                ->update(['slug' => 'audit_logs.view']);
+        }
 
         foreach ($permissions as $permission) {
             $record = Permission::withTrashed()->updateOrCreate(

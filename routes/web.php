@@ -9,6 +9,7 @@ use App\Http\Controllers\Stock\StockAdjustmentController;
 use App\Http\Controllers\Stock\StockController;
 use App\Http\Controllers\Stock\StockInController;
 use App\Http\Controllers\Stock\StockMovementController;
+use App\Http\Controllers\Stock\StockOutController;
 use App\Http\Controllers\Warehouse\WarehouseController;
 use Illuminate\Support\Facades\Route;
 
@@ -173,6 +174,19 @@ Route::middleware('auth')->group(function () {
     Route::get('/stock-ins/{stockIn}', [StockInController::class, 'show'])
         ->middleware('permission:stock-in.view')
         ->name('stock-ins.show');
+
+    Route::get('/stock-outs', [StockOutController::class, 'index'])
+        ->middleware('permission:stock-out.view')
+        ->name('stock-outs.index');
+    Route::get('/stock-outs/create', [StockOutController::class, 'create'])
+        ->middleware('permission:stock-out.create')
+        ->name('stock-outs.create');
+    Route::post('/stock-outs', [StockOutController::class, 'store'])
+        ->middleware('permission:stock-out.create')
+        ->name('stock-outs.store');
+    Route::get('/stock-outs/{stockOut}', [StockOutController::class, 'show'])
+        ->middleware('permission:stock-out.view')
+        ->name('stock-outs.show');
 
     Route::get('/stock-adjustments/create', [StockAdjustmentController::class, 'create'])
         ->middleware('permission:stock-adjustments.create')

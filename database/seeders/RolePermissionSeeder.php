@@ -35,6 +35,7 @@ class RolePermissionSeeder extends Seeder
                 'stock-adjustments.create',
                 'stock-in.view',
                 'stock-in.create',
+                'stock-out.view',
                 'stock-out.create',
                 'stock-transfer.create',
             ])

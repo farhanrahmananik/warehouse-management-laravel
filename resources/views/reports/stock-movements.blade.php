@@ -16,6 +16,11 @@
             <h1 class="h3 mb-1">Stock Movement Report</h1>
             <p class="text-muted mb-0">Review read-only stock movement history across warehouses and products.</p>
         </div>
+        @can('permission', 'reports.export')
+            <a href="{{ route('reports.stock-movements.export', request()->query()) }}" class="btn btn-outline-primary">
+                Export CSV
+            </a>
+        @endcan
     </div>
 
     <form method="GET" action="{{ route('reports.stock-movements') }}" class="card shadow-sm border-0 mb-4">

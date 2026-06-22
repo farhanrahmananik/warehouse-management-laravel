@@ -28,6 +28,11 @@
             <h1 class="h3 mb-1">Inventory Report</h1>
             <p class="text-muted mb-0">Review read-only warehouse inventory balances.</p>
         </div>
+        @can('permission', 'reports.export')
+            <a href="{{ route('reports.inventory.export', request()->query()) }}" class="btn btn-outline-primary">
+                Export CSV
+            </a>
+        @endcan
     </div>
 
     <form method="GET" action="{{ route('reports.inventory') }}" class="card shadow-sm border-0 mb-4">

@@ -8,8 +8,10 @@ use App\Models\Product;
 use App\Models\StockMovement;
 use App\Models\Warehouse;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\LazyCollection;
 
 class StockMovementReportService
 {
@@ -54,11 +56,51 @@ class StockMovementReportService
     }
 
     /**
+     * @param  array{warehouse_id?: int|string|null, product_id?: int|string|null, movement_type?: string|null, date_from?: string|null, date_to?: string|null}  $filters
+     * @return LazyCollection<int, list<string>>
+     */
+    public function exportRows(array $filters): LazyCollection
+    {
+        $movementTypes = self::movementTypes();
+
+        return $this->baseMovementQuery($this->normalizeFilters($filters))
+            ->lazy()
+            ->map(function (StockMovement $movement) use ($movementTypes): array {
+                $warehouse = $movement->warehouse;
+                $product = $movement->product;
+                $movementType = (string) $movement->movement_type;
+                $referenceType = $movement->reference_type;
+
+                return [
+                    $movement->created_at?->format('Y-m-d H:i:s') ?? '',
+                    $warehouse?->name ?? '',
+                    $product?->sku ?? '',
+                    $product?->name ?? '',
+                    $movementTypes[$movementType] ?? ucfirst(str_replace('_', ' ', $movementType)),
+                    $this->formatDecimal($movement->quantity, 4),
+                    $this->formatDecimal($movement->balance_after, 4),
+                    $referenceType ? class_basename($referenceType) : '',
+                    $movement->reference_id === null ? '' : (string) $movement->reference_id,
+                ];
+            });
+    }
+
+    /**
      * @param  array<string, mixed>  $filters
      */
     private function movementRows(array $filters, int $perPage = 15): LengthAwarePaginator
     {
-        $query = StockMovement::query()
+        return $this->baseMovementQuery($filters)
+            ->paginate($perPage)
+            ->appends($this->filledFilters($filters));
+    }
+
+    /**
+     * @param  array<string, mixed>  $filters
+     */
+    private function baseMovementQuery(array $filters): Builder
+    {
+        return StockMovement::query()
             ->with(['warehouse', 'product.category', 'product.unit', 'creator'])
             ->when($filters['warehouse_id'] ?? null, function ($query, $warehouseId) {
                 $query->where('warehouse_id', $warehouseId);
@@ -77,8 +119,6 @@ class StockMovementReportService
             })
             ->latest('created_at')
             ->latest('id');
-
-        return $query->paginate($perPage)->appends($this->filledFilters($filters));
     }
 
     private function activeWarehouses(): Collection
@@ -126,5 +166,10 @@ class StockMovementReportService
     private function filledFilters(array $filters): array
     {
         return array_filter($filters, fn ($value): bool => $value !== null && $value !== '');
+    }
+
+    private function formatDecimal(mixed $value, int $decimals): string
+    {
+        return number_format((float) ($value ?? 0), $decimals, '.', '');
     }
 }

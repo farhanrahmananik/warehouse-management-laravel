@@ -8,7 +8,9 @@ use App\Models\PurchaseOrder;
 use App\Models\Supplier;
 use App\Models\Warehouse;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
+use Illuminate\Support\LazyCollection;
 
 class PurchaseOrderReportService
 {
@@ -50,11 +52,51 @@ class PurchaseOrderReportService
     }
 
     /**
+     * @param  array{supplier_id?: int|string|null, warehouse_id?: int|string|null, status?: string|null, date_from?: string|null, date_to?: string|null}  $filters
+     * @return LazyCollection<int, list<string>>
+     */
+    public function exportRows(array $filters): LazyCollection
+    {
+        $statuses = self::statuses();
+
+        return $this->basePurchaseOrderQuery($this->normalizeFilters($filters))
+            ->lazy()
+            ->map(function (PurchaseOrder $purchaseOrder) use ($statuses): array {
+                $warehouse = $purchaseOrder->warehouse;
+                $status = (string) $purchaseOrder->status;
+
+                return [
+                    $purchaseOrder->po_number,
+                    $purchaseOrder->supplier?->name ?? '',
+                    $warehouse ? trim($warehouse->name.' ('.$warehouse->code.')') : '',
+                    $statuses[$status] ?? ucfirst(str_replace('_', ' ', $status)),
+                    $purchaseOrder->order_date?->toDateString() ?? '',
+                    $purchaseOrder->expected_date?->toDateString() ?? '',
+                    (string) (int) $purchaseOrder->items_count,
+                    $this->formatDecimal($purchaseOrder->ordered_quantity, 3),
+                    $this->formatDecimal($purchaseOrder->received_quantity, 3),
+                    $this->formatDecimal($purchaseOrder->pending_quantity, 3),
+                    $this->formatDecimal($purchaseOrder->total_amount, 2),
+                ];
+            });
+    }
+
+    /**
      * @param  array<string, mixed>  $filters
      */
     private function purchaseOrderRows(array $filters, int $perPage = 15): LengthAwarePaginator
     {
-        $query = PurchaseOrder::query()
+        return $this->basePurchaseOrderQuery($filters)
+            ->paginate($perPage)
+            ->appends($this->filledFilters($filters));
+    }
+
+    /**
+     * @param  array<string, mixed>  $filters
+     */
+    private function basePurchaseOrderQuery(array $filters): Builder
+    {
+        return PurchaseOrder::query()
             ->with(['supplier', 'warehouse', 'createdBy', 'approvedBy'])
             ->select('purchase_orders.*')
             ->selectSub(function ($query) {
@@ -94,8 +136,6 @@ class PurchaseOrderReportService
             })
             ->latest('order_date')
             ->latest('id');
-
-        return $query->paginate($perPage)->appends($this->filledFilters($filters));
     }
 
     private function activeSuppliers(): Collection
@@ -142,5 +182,10 @@ class PurchaseOrderReportService
     private function filledFilters(array $filters): array
     {
         return array_filter($filters, fn ($value): bool => $value !== null && $value !== '');
+    }
+
+    private function formatDecimal(mixed $value, int $decimals): string
+    {
+        return number_format((float) ($value ?? 0), $decimals, '.', '');
     }
 }

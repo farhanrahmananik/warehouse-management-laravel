@@ -9,7 +9,9 @@ use App\Models\Product;
 use App\Models\Warehouse;
 use App\Models\WarehouseStock;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
+use Illuminate\Support\LazyCollection;
 
 class InventoryReportService
 {
@@ -37,13 +39,48 @@ class InventoryReportService
     }
 
     /**
+     * @param  array{warehouse_id?: int|string|null, product_id?: int|string|null, category_id?: int|string|null, stock_status?: string|null}  $filters
+     * @return LazyCollection<int, list<string>>
+     */
+    public function exportRows(array $filters): LazyCollection
+    {
+        return $this->baseInventoryQuery($this->normalizeFilters($filters))
+            ->lazy()
+            ->map(function (WarehouseStock $stock): array {
+                $warehouse = $stock->warehouse;
+                $product = $stock->product;
+
+                return [
+                    $warehouse?->name ?? '',
+                    $product?->sku ?? '',
+                    $product?->name ?? '',
+                    $product?->category?->name ?? '',
+                    $this->formatDecimal($stock->quantity, 4),
+                    $this->formatDecimal($stock->reserved_quantity, 4),
+                    $this->formatDecimal($stock->available_quantity, 4),
+                    $this->formatDecimal($product?->reorder_level, 2),
+                ];
+            });
+    }
+
+    /**
      * @param  array<string, mixed>  $filters
      */
     private function inventoryRows(array $filters, int $perPage = 15): LengthAwarePaginator
     {
+        return $this->baseInventoryQuery($filters)
+            ->paginate($perPage)
+            ->appends($this->filledFilters($filters));
+    }
+
+    /**
+     * @param  array<string, mixed>  $filters
+     */
+    private function baseInventoryQuery(array $filters): Builder
+    {
         $availableQuantityExpression = '(warehouse_stocks.quantity - warehouse_stocks.reserved_quantity)';
 
-        $query = WarehouseStock::query()
+        return WarehouseStock::query()
             ->with(['warehouse', 'product.category', 'product.unit'])
             ->join('warehouses', 'warehouse_stocks.warehouse_id', '=', 'warehouses.id')
             ->join('products', 'warehouse_stocks.product_id', '=', 'products.id')
@@ -78,8 +115,6 @@ class InventoryReportService
             ->orderBy('warehouses.name')
             ->orderBy('warehouses.code')
             ->orderBy('products.name');
-
-        return $query->paginate($perPage)->appends($this->filledFilters($filters));
     }
 
     private function activeWarehouses(): Collection
@@ -133,5 +168,10 @@ class InventoryReportService
     private function filledFilters(array $filters): array
     {
         return array_filter($filters, fn ($value): bool => $value !== null && $value !== '');
+    }
+
+    private function formatDecimal(mixed $value, int $decimals): string
+    {
+        return number_format((float) ($value ?? 0), $decimals, '.', '');
     }
 }

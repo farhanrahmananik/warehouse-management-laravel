@@ -3,6 +3,8 @@
 namespace App\Http\Controllers\Report;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Report\InventoryReportFilterRequest;
+use App\Services\Report\InventoryReportService;
 use Illuminate\View\View;
 
 class ReportController extends Controller
@@ -12,9 +14,12 @@ class ReportController extends Controller
         return view('reports.index');
     }
 
-    public function inventory(): View
+    public function inventory(
+        InventoryReportFilterRequest $request,
+        InventoryReportService $inventoryReportService,
+    ): View
     {
-        return view('reports.inventory');
+        return view('reports.inventory', $inventoryReportService->generate($request->validated()));
     }
 
     public function stockMovements(): View

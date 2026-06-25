@@ -16,6 +16,20 @@ Warehouse Management - Laravel is a production-style Warehouse and Inventory Man
 | Audit Logs | Read-only audit log UI plus audit events for authentication, catalog, warehouse, stock, and purchase order actions. |
 | Dashboard | Read-only dashboard summaries for catalog, warehouse, stock, purchase orders, low stock, and recent movements. |
 
+## Screenshots
+
+### Login Page
+
+<p align="center">
+  <img src="docs/screenshots/warehouse-login.png" alt="Warehouse Management Laravel login page" width="900">
+</p>
+
+### Dashboard
+
+<p align="center">
+  <img src="docs/screenshots/warehouse-dashboard.png" alt="Warehouse Management Laravel dashboard" width="900">
+</p>
+
 ## Tech Stack
 
 | Layer | Technology |
